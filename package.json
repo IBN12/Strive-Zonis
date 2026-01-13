@@ -1,0 +1,26 @@
+{
+  "name": "strive-zonis",
+  "version": "1.0.0",
+  "description": "Strive Zonis: We Are Zonis",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node --watch server",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IBN12/Strive-Zonis.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/IBN12/Strive-Zonis/issues"
+  },
+  "homepage": "https://github.com/IBN12/Strive-Zonis#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
