@@ -6,6 +6,8 @@ export const initiatorCards = [
         atk: 45,
         def: 12,
         esse: 100,
+        selected: false, 
+        cardSprite: null,
     },
 
     {
@@ -15,6 +17,8 @@ export const initiatorCards = [
         atk: 44,
         def: 14,
         esse: 100,
+        selected: false,
+        cardSprite: null,
     },
 
     {
@@ -24,6 +28,8 @@ export const initiatorCards = [
         atk: 39, 
         def: 17,
         esse: 100,
+        selected: false, 
+        cardSprite: null,  
     },
 
     {
@@ -33,6 +39,8 @@ export const initiatorCards = [
         atk: 27,
         def: 15,
         esse: 100,
+        selected: false, 
+        cardSprite: null, 
     },
 
     {
@@ -42,15 +50,19 @@ export const initiatorCards = [
         atk: 24,
         def: 13,
         esse: 100,
+        selected: false, 
+        cardSprite: null, 
     },
 
     {
-        name: "The Trendsetters Rotao",
+        name: "The Trendsetter Rotao",
         shortName: "Rotao",
         cate: "Fere",
         atk: 25,
         def: 18, 
         esse: 100, 
+        selected: false, 
+        cardSprite: null, 
     },
 
     {
@@ -60,6 +72,8 @@ export const initiatorCards = [
         atk: 19,
         def: 22,
         esse: 100,
+        selected: false,
+        cardSprite: null, 
     },
 
     {
@@ -69,6 +83,8 @@ export const initiatorCards = [
         atk: 16,
         def: 33,
         esse: 100,
+        selected: false, 
+        cardSprite: null, 
     },
 
     {
@@ -78,6 +94,8 @@ export const initiatorCards = [
         atk: 15,
         def: 26,
         esse: 100, 
+        selected: false, 
+        cardSprite: null, 
     },
 
     {
@@ -87,5 +105,7 @@ export const initiatorCards = [
         atk: 16,
         def: 25,
         esse: 100,
+        selected: false, 
+        cardSprite: null, 
     }
 ]
