@@ -2,11 +2,15 @@
   "name": "strive-zonis",
   "version": "1.0.0",
   "description": "Strive Zonis: We Are Zonis",
-  "main": "index.js",
+  "main": "electron-main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node --watch server",
-    "start": "node server.js"
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
   },
   "repository": {
     "type": "git",
@@ -21,6 +25,36 @@
   },
   "homepage": "https://github.com/IBN12/Strive-Zonis#readme",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "phaser": "^4.2.1"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.isom.strivezonis",
+    "productName": "Strive Zonis",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.js",
+      "public/**/*",
+      "package.json",
+      "!**/node_modules/*/{CHANGELOG.md, README.md, README, readme.md, readme}",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.games"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    }
   }
 }

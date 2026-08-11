@@ -1,6 +1,10 @@
 import { initiatorCards } from '../models/initiatorCards.js';
+import { SINGULARITY_CARDS } from '../models/singularityCards.js';
 
 import { singularityPointStore } from '../gameTools/singularityPointStore.js';
+import { computerAuditSystem } from '../gameTools/computerAuditSystem.js';
+import { UtilityAI } from '../gameTools/computerIntelligence.js'; 
+import { SwapState } from '../gameTools/swapState.js';
 
 export default class GameBattleScene extends Phaser.Scene {
     constructor(){
@@ -8,6 +12,19 @@ export default class GameBattleScene extends Phaser.Scene {
     }
 
     init(data){
+        // Temporary Computer Intelligence Properties:
+        this.cardSwitchTriggerTest = true; // For Testing purposes. 
+        this.firstMoveComplete = false; 
+        this.compWillAttack = false; 
+        this.compWillDefend = false;
+        this.playerTotalPreviousCardSwaps = 0; 
+        this.compSwapState = null;
+        this.swapToAttackTimeFrame = {
+            noSwap: 900,
+            normalSwap: 1100,
+            timeFrame: null,
+        }
+
         this.moveSelection = {
             player: false,
             comp: false,
@@ -22,6 +39,20 @@ export default class GameBattleScene extends Phaser.Scene {
             playerPoints: 0,
             compPoints: 0,
         }
+        this.playerSingularityCardUse = {
+            cardObj: null,
+            cardName: null,
+            desc: null,
+            turns: null,
+        }
+        this.compSingularityCardUse = {
+            cardObj: null,
+            cardName: null,
+            desc: null,
+            turns: null, 
+        }
+        this.playerSingularityCardArr = [];
+        this.compSingularityCardArr = []; 
 
         this.attackMultipliers = [0, 1/2, 2/3, 3/4, 1]; 
 
@@ -30,6 +61,7 @@ export default class GameBattleScene extends Phaser.Scene {
         this.playerActiveCardKey  = null;
         this.compAllCards         = [];
         this.compActiveCardIndex  = 0;
+        this.compDeckIndex = []; 
 
         this.playerCardEsse       = {};
         this.compCardEsse         = [];
@@ -48,6 +80,16 @@ export default class GameBattleScene extends Phaser.Scene {
         this.bcsCompSlotCon       = null;
         this.cdsCompDeckCon       = null;
         this.cardDefeated         = null;
+
+        // In game audit system:
+        this.playerPreviousMove   = null;
+        this.compPreviousMove     = null;
+
+        this.playerPreviousAttkMultiplier = null;
+        this.compPreviousAttkMultiplier   = null;
+
+        this.playerPreviousAttkPtWithMultiplier = null
+        this.compPreviousAttkPtWithMultiplier   = null;
     }
 
     preload(){
@@ -523,7 +565,7 @@ export default class GameBattleScene extends Phaser.Scene {
                 ease:       'Power2.easeIn',
                 onComplete: () => {
                     flipACoinContainer.destroy();
-                    this.flipACoinAnimation(); 
+                    this.flipACoinAnimation(); // Performs coin fliping animation. 
                 },
             });
         };
@@ -586,15 +628,28 @@ export default class GameBattleScene extends Phaser.Scene {
             if (this.coinFlipData.choice === winner)
             {
                 this.moveSelection.player = true;
+
+                // -- Computer Auditing System -- 
+                // Audit if the Player or Comp get the first move
+                computerAuditSystem.playerMove = this.moveSelection.player;
+                computerAuditSystem.compMove = false;
+
                 console.log(`${this.coinFlipData.by} gets the first move.`); // Testing
             }
             else
             {
                 this.moveSelection.comp = true; 
+
+                // -- Computer Auditing System -- 
+                // Audit if the Player or Comp get the first move 
+                computerAuditSystem.compMove = this.moveSelection.comp;
+                computerAuditSystem.playerMove = false;
+
                 console.log('Computer gets the first move.'); // Testing 
             }
 
-            this.gameBattleContent(); 
+            this.gameBattleContent(); // Official Game Battle Content
+            this.compAutoSwapCard();  // Computer Intelligence Card Swap
         });
     }
 
@@ -605,6 +660,7 @@ export default class GameBattleScene extends Phaser.Scene {
         this.battleCardStation();
         this.cardDeckStation();
         this.battleControlStation();
+        this.singularityCardDeckStation(); 
     }
 
     _initBattleCardState(){
@@ -619,9 +675,19 @@ export default class GameBattleScene extends Phaser.Scene {
         ['Supra', 'Fere', 'Bonum1', 'Bonum2'].forEach(key => {
             if (this.playerSelectedCards?.[key]) {
                 this.playerCardEsse[key] = this.playerSelectedCards[key].esse;
+
+                // |Computer Audit System for Core Concept Intelligence (CCI)|
+                // -- Auditing the active card deck for the Player (One Time Audit) --
+                computerAuditSystem.activePlayerCardDeck.push(this.playerSelectedCards[key]); 
             }
         });
         this.compCardEsse = this.compAllCards.map(c => c.esse);
+
+        // |Computer Audit System for Core Concept Intelligence (CCI)|
+        // -- Auditing the active card deck for the Computer (One Time Audit) --
+        this.compAllCards.forEach((card) => {
+            computerAuditSystem.activeCompCardDeck.push(card); 
+        });
     }
 
     _generateCompDeck(){
@@ -904,6 +970,12 @@ export default class GameBattleScene extends Phaser.Scene {
             ? this.playerSelectedCards[this.playerActiveCardKey]
             : null;
         const compCard   = this.compAllCards.length > 0 ? this.compAllCards[0] : null;
+
+        // |Computer Auditing System for Core Concept Intelligence (CCI)|
+        // -- Auditing the Starting Player Battle Card --
+        computerAuditSystem.activePlayerCard = playerCard;
+        computerAuditSystem.activeCompCard = compCard; 
+
 
         const playerSlotCon = this.add.container(0, 0);
         const compSlotCon   = this.add.container(0, 0);
@@ -1197,8 +1269,8 @@ export default class GameBattleScene extends Phaser.Scene {
 
     _getCompDeckCards(){
         return this.compAllCards
-            .map((card, i) => ({ key: i, card }))
-            .filter(entry => entry.key > this.compActiveCardIndex);
+            .map((card, i) =>  ({ key: i, card }))
+            .filter(entry => entry.key !== this.compActiveCardIndex); 
     }
 
     _buildDeckCards(container, deckEntries, side, panelW, cardAreaCY){
@@ -1206,6 +1278,9 @@ export default class GameBattleScene extends Phaser.Scene {
         const accentColor = isPlayer ? 0x00ffcc : 0xff6600;
         const labelColor  = isPlayer ? '#00ffcc' : '#ff8844';
         const pSize       = 48;
+
+        // Reset comp deck index:
+        this.compDeckIndex.length = 0; 
 
         // Spread 3 slots evenly within each half using equal outer + inter-card spacing
         const halfW    = panelW / 2;   // 380
@@ -1219,6 +1294,15 @@ export default class GameBattleScene extends Phaser.Scene {
 
         deckEntries.forEach((entry, i) => {
             if (!entry.card || i >= 3) return;
+
+            // Create Comp Deck Index:
+            this.compAllCards.forEach((card, index) => {
+                if (entry.card.name === card.name)
+                {
+                    this.compDeckIndex.push(index); 
+                }
+            }); 
+
             const card = entry.card;
             const sx   = slotXs[i];
             const sy   = cardAreaCY - 4;  // nudge up slightly to leave room for name/dot below
@@ -1281,6 +1365,20 @@ export default class GameBattleScene extends Phaser.Scene {
     }
 
     _swapPlayerCard(newActiveKey){
+        // |Computer Audit System for Core Concept Intelligence|
+        // -- Card Swap Audit for the Player --
+        let swapPatternObj = {
+            from: this.playerSelectedCards[this.playerActiveCardKey],
+            to: this.playerSelectedCards[newActiveKey],
+            attkCard: 'none', 
+            cardAttked: 'none', 
+        }
+        computerAuditSystem.playerPatternCardSwaps[computerAuditSystem.playerTotalCardSwaps] = {
+            ...swapPatternObj,
+        }
+        computerAuditSystem.playerTotalCardSwaps++; 
+        console.log('Total Player Card Swap: ', computerAuditSystem.playerTotalCardSwaps); // Testing
+        console.log('The Swap: ', computerAuditSystem.playerPatternCardSwaps); // Testing 
         console.log("Current Active Key: ", this.playerActiveCardKey); // Testing 
         console.log("New Active Swap Key: ", newActiveKey); // Testing
         console.log("\n"); // Testing  
@@ -1308,6 +1406,397 @@ export default class GameBattleScene extends Phaser.Scene {
         this._buildDeckCards(newDeckCon, this._getPlayerDeckCards(), 'player', this.bcsPanelW, this.cdsCardAreaCY);
         this.cdsContainer.add(newDeckCon);
         this.cdsPlayerDeckCon = newDeckCon;
+
+        // |Computer Auditing System for Core Concept Intelligence (CCI)| 
+        // -- Active Battle Card Audit --
+        computerAuditSystem.activePlayerCard = this.playerSelectedCards[this.playerActiveCardKey];
+        computerAuditSystem.activeCompCard = this.compAllCards[this.compActiveCardIndex];  
+    }
+
+    // compAutoSwapCard(): Computer will swap there cards automatically: 
+    compAutoSwapCard(){
+        // Note: Base the swaps on game difficulty.
+        // The game difficulty for now will be easy.
+        let tempGameDifficulty = 'easy'; 
+
+        this.time.addEvent({
+            delay: 1000, 
+            callback: this._timeBasedCardSwap,
+            args: [tempGameDifficulty],
+            callbackScope: this,
+            loop: true,
+        });
+    }
+
+    // _timeBasedCardSwap(): Comp cards will be switched out on a Time-Based trigger.
+    _timeBasedCardSwap(difficulty){
+        // console.log('|__Time Based Card Swap__|'); // Testing
+
+        // TB => Time Based 
+        // console.log('TB-Active Comp Card: ', this.compAllCards[this.compActiveCardIndex]); // Testing
+        // console.log('TB-ACtive Comp Card Esse: ', this.compCardEsse[this.compActiveCardIndex]); // Testing
+        // console.log('TB-Comp Previous Attack Multiplier: ', this.compPreviousAttkMultiplier); // Testing
+        // console.log('TB-Comp Previous Attack Multiplier With Attack Point: ', this.compPreviousAttkPtWithMultiplier); // Testing  
+        // console.log('TB-Comp Move Selection: ', this.moveSelection.comp); // Testing
+        // console.log('\n'); // Testing
+
+        // console.log("TB-Active Player Card: ", this.playerSelectedCards[this.playerActiveCardKey]); // Testing
+        // console.log('TB-Active Player Card Esse: ', this.playerCardEsse[this.playerActiveCardKey]); // Testing
+        // console.log("TB-Player Previous Attack Multiplier: ", this.playerPreviousAttkMultiplier); // Testing 
+        // console.log("TB-Player Previous Attack Multiplier With Attack Point: ", this.playerPreviousAttkPtWithMultiplier); // Testing
+        // console.log('TB-Player Move Selection:  ', this.moveSelection.player); // Testing 
+        // console.log('\n'); // Testing
+
+        // console.log('TB-Player Pattern Card Swap: ', computerAuditSystem.playerPatternCardSwaps); // Testing 
+        for (const key in computerAuditSystem.playerPatternCardSwaps)
+        {
+            console.log(computerAuditSystem.playerPatternCardSwaps[key]); // Testing 
+        }
+        console.log('\n'); // Testing 
+
+        const esseLength = Math.abs(this.compCardEsse[this.compActiveCardIndex] - this.playerCardEsse[this.playerActiveCardKey]);
+
+        const randomChoiceArr = [1, 2, 3]; 
+        
+        // Phase 1: Force the computer to protect its 'Supra' card when the Players 'Move Selection' is true.
+        // The comp will switch the 'Supra' out and back in when the comps 'Move Selection' is true.
+        if (this.moveSelection.player === true && !this.firstMoveComplete) // Player has first move
+        {
+            if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra')
+            {
+                this._swapCompCard(); 
+
+                this.firstMoveComplete = true; 
+            }
+        }
+        else if (this.moveSelection.comp === true && !this.firstMoveComplete) // comp has first move
+        {
+            // Phase Commencement: Will have to initiate some type of Monte Carlo Tree with actions for the first computer move.
+            // Preferably allowing the computer to attack with their Supra card and switch it out 
+            // for another card when the Player has the next turn. 
+            this.firstMoveComplete = true;
+        }
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // New: Phase 2 Tempo Swtiching with pattern states: 
+        if (this.firstMoveComplete)
+        {
+            if (this.compAllCards[this.compActiveCardIndex].cate === "Supra")
+            {
+                if (this.playerPreviousAttkMultiplier === 0)
+                {
+                    // add .5 x3 confindence points: 
+                }
+                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
+                {
+                    // subtract .5 confidence points:
+                }
+                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
+                {
+                    // subtract .5 x2 confidence points:
+                }
+                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
+                {
+                    // subtract .5 x3 confidence points:
+                }
+                else if (this.playerPreviousAttkMultiplier === 1)
+                {
+                    // subtract .5 x4 confidence points:
+                }
+
+                // Read the player card swap pattern:  
+                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
+                {
+                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
+
+                    // Only reads the players swap pattern. 
+                    this._readPlayerCardSwapPattern(); 
+                }
+            }
+            else if (this.compAllCards[this.compActiveCardIndex].cate === 'Fere')
+            {
+                if (this.playerPreviousAttkMultiplier === 0)
+                {
+                    // add .5 x2 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
+                {
+                    // subtract .5 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
+                {
+                    // subtract .5 x2 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
+                {
+                    // subtract .5 x2 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === 1)
+                {
+                    // subtract .5 x2 confidence points
+                }
+
+                // Read the player card swap pattern: 
+                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
+                {
+                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
+                    this._readPlayerCardSwapPattern(); 
+                }
+            }
+            else if (this.compAllCards[this.compActiveCardIndex].cate === 'Bonum')
+            {
+                if (this.playerPreviousAttkMultiplier === 0)
+                {
+                    // add .5 confidnece points
+                }
+                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
+                {
+                    // subtract .5 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
+                {
+                    // subtract .5 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
+                {
+                    // subtract .5 confidence points
+                }
+                else if (this.playerPreviousAttkMultiplier === 1)
+                {
+                    // subtract .5 confidence points
+                }
+
+                // Read the player card swap pattern: 
+                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
+                {
+                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
+                    this._readPlayerCardSwapPattern(); 
+                }
+            }
+
+
+            if (this.compSwapState !== null)
+            {
+                this._swapCompCardState(this.compSwapState); 
+            }
+        }
+    }
+
+    // _swapCompCard: Computer will swap there cards out here:
+    _swapCompCard(){
+        // Change the 'Active Card Index' with the'Math.random' function: 
+        let randomIndex = Math.floor(Math.random() * this.compDeckIndex.length);         
+        this.compActiveCardIndex = this.compDeckIndex[randomIndex];
+
+        // Rebuild the BCS comp slot: 
+        this.bcsCompSlotCon.removeAll(true);
+        this.bcsCompSlotCon.destroy(); 
+        const newBcsSlot = this.add.container(0,0); 
+        this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+        this.bcsContainer.add(newBcsSlot);
+        this.bcsCompSlotCon = newBcsSlot;
+
+        // Card changing animation: 
+        this.tweens.add({
+            targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+            duration: 220, yoyo: true, ease: 'Back.easeOut', 
+        });
+
+        // Rebuild CDS comp deck: 
+        this.cdsCompDeckCon.removeAll(true); 
+        this.cdsCompDeckCon.destroy(); 
+        const newDeckCon = this.add.container(0,0); 
+        this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+        this.cdsContainer.add(newDeckCon); 
+        this.cdsCompDeckCon = newDeckCon; 
+
+        console.log('--Computer Card Deck Container: ', this.cdsCompDeckCon); // Testing 
+    }
+
+    //_swapCompCardState(): Will swap the cards depending on the 'Comps Swap State':
+    _swapCompCardState(swapState){
+        if (swapState === 'Very High Protection For Supra')
+        {
+            /** |Very High Protection For Supra|
+             * The Player has is preserving the esse of their Supra card by switching it out 
+             * and only using it for Attacks. 
+             * 
+             * The Computer will follow suit with also protecting its Supra Card by switching it out and
+             * also using it for attack methods. 
+             */
+            if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra' && !this.moveSelection.comp)
+            {
+                const randomIndex = Math.floor(Math.random() * this.compDeckIndex.length); 
+                this.compActiveCardIndex = this.compDeckIndex[randomIndex];
+
+                // Rebuild the BCS comp slot: 
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card changing animation: 
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck: 
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+            else if (this.compAllCards[this.compActiveCardIndex].cate !== 'Supra' && this.moveSelection.comp)
+            {
+                // declare the Supra index:
+                this.compActiveCardIndex = 0;
+
+                // Rebuild the BCS comp slot: 
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card changing animation:
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck:
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+        }
+    }
+
+    // NOTE: Will organize later. 
+    // _readPlayerCardSwapPattern(): ...
+    _readPlayerCardSwapPattern(){
+        let cardSwapArr = [];
+        let cateArr = [];
+        let newCate = null;
+        let testCates = [
+            { from: 'Supra', to: 'Fere' },
+            { from: 'Supra', to: 'Bonum' },
+            { from: 'Fere', to: 'Supra' },
+            { from: 'Fere', to: 'Bonum' },
+            { from: 'Bonum', to: 'Supra' },
+            { from: 'Bonum', to: 'Fere' },
+            { from: 'Bonum', to: 'Bonum' }, 
+        ];
+        let patterns = [];
+
+        // You could test these category swaps: 
+        // From: Supra, to: Fere
+        // From: Supra, to: Bonum
+        // From: Fere, to: Supra
+        // From: Fere, to: Bonum
+        // From: Bonum, to: Supra
+        // From: Bonum, to: Fere
+        // From: Bonum, to: Bonum
+
+        // WGO: The computer will try to find a consistent pattern:
+        // Once pattern is found, reset the scan to start reading at that pattern. 
+        for (const key in computerAuditSystem.playerPatternCardSwaps){
+
+            cardSwapArr.push(computerAuditSystem.playerPatternCardSwaps[key]);
+
+            cateArr.push({
+                from: computerAuditSystem.playerPatternCardSwaps[key].from.cate,
+                to: computerAuditSystem.playerPatternCardSwaps[key].to.cate,
+                attkCard: computerAuditSystem.playerPatternCardSwaps[key].attkCard.cate || computerAuditSystem.playerPatternCardSwaps[key].attkCard, 
+                cardAttked: computerAuditSystem.playerPatternCardSwaps[key].cardAttked.cate || computerAuditSystem.playerPatternCardSwaps[key].cardAttked,
+            }); 
+        }
+
+        // ... ...
+        testCates.forEach((test) => {
+            cateArr.forEach((cate, index) => {
+                if (index % 2 === 0)
+                {
+                    if (cate.from === test.from && cate.to === test.to)
+                    {
+                        patterns.push({ from: cate.from, to: cate.to, match: true, attkCard: cate.attkCard, cardAttked: cate.cardAttked });
+                    }
+                }
+                else
+                {
+                    if (cate.to === test.from && cate.from === test.to)
+                    {
+                        patterns.push({ from: cate.from, to: cate.to, match: true, attkCard: cate.attkCard, cardAttked: cate.cardAttked }); 
+                    }
+                }
+            });
+        });
+        
+        // Test the patterns array when the length is 9:
+        if (patterns.length === 10)
+        {
+            // Reset the 'Swap Auditing' values:
+            computerAuditSystem.playerTotalCardSwaps = 0;
+            computerAuditSystem.playerPatternCardSwaps = {};  
+
+            patterns.forEach((p) => {
+                // Card used for attacks:
+                if (p.attkCard === 'Supra')
+                {
+                    computerAuditSystem.attksWithSupra++;
+                }
+                else if (p.attkCard === 'Fere')
+                {
+                    computerAuditSystem.attksWithFere++;
+                }
+                else if (p.attkCard === 'Bonum')
+                {
+                    computerAuditSystem.attksWithBonum++; 
+                }
+
+                // Card attacked: 
+                if (p.cardAttked === 'Supra')
+                {
+                    computerAuditSystem.supraAttked++;
+                }
+                else if (p.cardAttked === 'Fere')
+                {
+                    computerAuditSystem.fereAttked++;
+                }
+                else if (p.cardAttked === 'Bonum')
+                {
+                    computerAuditSystem.bonumAttked++;  
+                }
+            });
+
+            // Find the computers swap state: 
+            if (computerAuditSystem.attksWithSupra > computerAuditSystem.supraAttked)
+            {
+                if (computerAuditSystem.attksWithSupra >= 4 && computerAuditSystem.supraAttked === 0) // Very High Protection for Supra
+                {
+                    // const swapState = new SwapState('Very High Protection For Supra'); 
+                    // swapState.bcsContainer      = this.bcsContainer;
+                    // swapState.bcsCompSlotCon    = this.bcsCompSlotCon;
+                    // swapState.cdsContainer      = this.cdsContainer; 
+                    // swapState.cdsCompDeckCon    = this.cdsCompDeckCon; 
+
+                    // swapState.compMove          = this.moveSelection.comp; 
+                    this.compSwapState = 'Very High Protection For Supra';  
+                    this.cardSwitchTriggerTest = false; 
+                }
+            }
+        }
     }
 
     // battleControlStation(): Player control station with Attack and Defend buttons.
@@ -1412,11 +1901,11 @@ export default class GameBattleScene extends Phaser.Scene {
         // ── Button pointer events ───────────────────────────────────────
         attackBg.on('pointerover', () => attackBg.setFillStyle(0x003322, 0.95));
         attackBg.on('pointerout',  () => attackBg.setFillStyle(0x001a11, 0.90));
-        attackBg.on('pointerdown', () => this._playerAttack());
+        attackBg.on('pointerdown', () => this._playerAttack()); // Base Move
 
         defendBg.on('pointerover', () => defendBg.setFillStyle(0x2a2200, 0.95));
         defendBg.on('pointerout',  () => defendBg.setFillStyle(0x1a1400, 0.90));
-        defendBg.on('pointerdown', () => this._playerDefend());
+        defendBg.on('pointerdown', () => this._playerDefend()); // Base Move
 
         this._setControlButtonsActive(isTurn);
 
@@ -1480,8 +1969,28 @@ export default class GameBattleScene extends Phaser.Scene {
     _playerAttack(){
         if (!this.moveSelection.player || this.controlBusy) return;
         this.controlBusy = true;
-        this._setControlButtonsActive(false);
-        this._resolveAttack('player');
+
+        // --- Determine the style of the 'Attack' ---
+        // (1) 'Basic Attack' 
+        // (2) 'Basic Attack' + 'Singularity Card'
+        if (this.playerSingularityCardUse.cardObj !== null)
+        {
+            // ... 'Basic Attack' + 'Singularity Card' ... 
+            if (this.playerSingularityCardUse.cardName === 'NOVA BURST')
+            {
+                // NOVA BURST: +2x ATK on the next Strike: 
+                this._setControlButtonsActive(false); 
+                this._resolveAttack('player');
+
+                this.time.delayedCall(800, () => this._resolveAttack('player'));
+            }
+        }
+        else
+        {
+            // ... 'Basic Attack' ... 
+            this._setControlButtonsActive(false); 
+            this._resolveAttack('player');
+        }
     }
 
     _playerDefend(){
@@ -1508,10 +2017,70 @@ export default class GameBattleScene extends Phaser.Scene {
         this.time.delayedCall(1000, () => this._compTurn());
     }
 
+    // _compTurn(): The official 'Computer Turn'. 
     _compTurn(){
+        // |Computer Auditing System for Computer Intelligence|
+        /** Audits completed outside of this function:
+         * -- Active Card Audit -- 
+         */
+
+        // Note: Default Difficulty will be Easy for now.
+        let defaultDifficulty = 'easy';
+        computerAuditSystem.gameDifficulty = defaultDifficulty;
+
+        // -- Singularity Point Audit --
+        computerAuditSystem.currentCompSp = this.singularityPointStock.compPoints;
+        computerAuditSystem.currentPlayerSp = this.singularityPointStock.playerPoints; 
+
+        // -- Previous Move Type Audit --
+        computerAuditSystem.previousPlayerMove = this.playerPreviousMove; 
+        computerAuditSystem.previousCompMove = this.compPreviousMove;
+
+        // -- Essence Audit (Esse: Health Audit) by Battle Cate and Battle Card Name -- 
+        // cKey => |Cate Key| such as Supra, Fere, and Bonum.
+        // cValue => |Category Value| such as Initiator Card like Tobo and Spunky. 
+        // eKey => |Esse Key| such as Supra, Fere, and Bonum.
+        // eValue => |Esse Value| such as current number of esse. 
+        computerAuditSystem.playerCardDeckEsse = {};
+        for (const[cKey, cValue] of Object.entries(this.playerSelectedCards)){
+            for(const[eKey, eValue] of Object.entries(this.playerCardEsse)){
+                if (cKey === eKey)
+                {
+                    const esseCardObj = { esse: eValue, name: cValue.name };
+                    computerAuditSystem.playerCardDeckEsse[cKey] = { esseCardObj };
+                }
+            }
+        }
+
+        computerAuditSystem.compCardDeckEsse.length = 0; 
+        this.compCardEsse.forEach((esse, index) => {
+            const esseCardObj = { esse: esse, name: this.compAllCards[index].name };
+            computerAuditSystem.compCardDeckEsse.push(esseCardObj); 
+        });
+
+        console.log('\n'); // Testing
+        console.log('--------------'); // Testing
+        console.log('ESSE LOG'); // Testing
+        console.log('Player Active Key: ', this.playerActiveCardKey); // Testing
+        console.log('Computer Active Card Index: ', this.compActiveCardIndex); // Testing
+        console.log('Comp Cards: ', this.compAllCards); // Testing 
+        console.log(`Multipliers: 0:${0} 1/2:${(1/2).toFixed(2)} 2/3:${(2/3).toFixed(2)} 3/4:${(3/4).toFixed(2)} 1:${1}`); 
+        console.log('--------------'); // Testing 
+        console.log('\n'); // Testing
+
+        const uAi = new UtilityAI(computerAuditSystem); 
+        uAi.gather();
+
+        // -- (Base Attack) Hit Point Audit --
+        // if (this.compSwapState === null)
+        // {
+        //     this._resolveAttack('comp');
+        // }
+
         this._resolveAttack('comp');
     }
 
+    // _resolveAttack(): Will resolve thes players attack:
     _resolveAttack(attackerSide){
         // Determine if the 'Player' has the attacker side move: 
         const isPlayer  = attackerSide === 'player';
@@ -1560,13 +2129,18 @@ export default class GameBattleScene extends Phaser.Scene {
          * 2. 2/3 = 0.67 => 30 SP
          * 3. 3/4 = 0.75 => 40 SP
          * 4. 1 = Critical Hit => 50 SP
+         * 
+         * => Singularity Cards Point Bonus: Every Singularity Cards used will 
+         * result in extra Singularity Points (SP) gained:
+         * -> Nova Burst: Extra 20SP
          */
+        
         const attackMultiplierIndex = Math.floor(Math.random() * this.attackMultipliers.length);
         let attackMultiplier = this.attackMultipliers[attackMultiplierIndex];
-        attackMultiplier = attackMultiplier.toFixed(2); 
+        attackMultiplier = Number(attackMultiplier.toFixed(2)); 
 
         let attackWithMultiplier = atkerCard.atk * attackMultiplier;
-        attackWithMultiplier = attackWithMultiplier.toFixed(0);
+        attackWithMultiplier = Number(attackWithMultiplier.toFixed(0));
 
         console.log("Attack Multipler: ", attackMultiplier); // Testing 
         console.log("Attack With Multiplier: ", attackWithMultiplier); // Testing
@@ -1574,7 +2148,7 @@ export default class GameBattleScene extends Phaser.Scene {
 
         // Call the singularity point store:
         const sp = singularityPointStore.attkMultiplierConversion[attackMultiplierIndex];
-        this.addSingularityPoints(isPlayer, sp, attackWithMultiplier); 
+        this.addSingularityPoints(isPlayer, sp); 
 
         // let damage = Math.max(1, atkerCard.atk - dfdrCard.def);
         let damage = attackWithMultiplier === 0 ? 0
@@ -1591,7 +2165,42 @@ export default class GameBattleScene extends Phaser.Scene {
         console.log("Defender Portrait: ", dfdrPortrait); // Testing
         console.log("\n"); // Testing 
 
+        // Collect attack data for the computerAuditSystem to build computer intelligence:
+        if (isPlayer && computerAuditSystem.playerTotalCardSwaps !== 10)
+        {
+            this.playerPreviousMove = 'attack';
+            this.playerPreviousAttkMultiplier = attackMultiplier;
+            this.playerPreviousAttkPtWithMultiplier = attackWithMultiplier;
+
+            const entries = Object.entries(computerAuditSystem.playerPatternCardSwaps); 
+            entries.forEach((entry, index) => {
+                const isLast = index === entries.length - 1; 
+            
+                if (isLast)
+                {
+                    computerAuditSystem.playerPatternCardSwaps[index].attkCard = this.playerSelectedCards[this.playerActiveCardKey]; 
+                }
+            });
+        }
+        else if (!isPlayer && !computerAuditSystem.playerTotalCardSwaps !== 10)
+        {
+            this.compPreviousMove = 'attack'; 
+            this.compPreviousAttkMultiplier = attackMultiplier; 
+            this.compPreviousAttkPtWithMultiplier = attackWithMultiplier;  
+
+            const entries = Object.entries(computerAuditSystem.playerPatternCardSwaps); 
+            entries.forEach((entry, index) => {
+                const isLast = index === entries.length - 1;
+
+                if (isLast)
+                {
+                    computerAuditSystem.playerPatternCardSwaps[index].cardAttked = this.playerSelectedCards[this.playerActiveCardKey]; 
+                }
+            });
+        }
+
         const applyAndFinish = () => {
+            // Note: Might audit damage for the computer audit system (CCI):
             const defeated = this._applyDamage(targetSide, damage);
             if (defeated) this.cardDefeated = targetSide;
 
@@ -1644,10 +2253,11 @@ export default class GameBattleScene extends Phaser.Scene {
     }
 
     // addSingularityPoint(): PLayer and computer will gain singularity points from actions.
-    addSingularityPoints(isPlayer, sp, attackWithMultiplier){
+    addSingularityPoints(isPlayer, sp){
         let spContainer = this.children.getByName('spContainer');
         console.log("SP Container: ", spContainer); // Testing
-        console.log("Attack Multipler Now: ", attackWithMultiplier); 
+
+        let additionalSingularityPoints = 0; 
 
         const { width }  = this.cameras.main;
         const cx         = width / 2;
@@ -1657,8 +2267,25 @@ export default class GameBattleScene extends Phaser.Scene {
 
         if (isPlayer)
         {
+            // 0 sp means the attack was a miss:
+            if (sp === 0) return; 
+
+            // Base Attack + Singularity Card will give an additional SP:
+            if (this.playerSingularityCardUse.cardObj !== null)
+            {
+                if (this.playerSingularityCardUse.cardName === 'NOVA BURST' && this.playerSingularityCardUse.turns === 2)
+                {
+                    additionalSingularityPoints = 20;
+                    console.log("Extra Singularity Point from Singularity Card: ", additionalSingularityPoints); // Testing 
+                    console.log("spAdded + SP: ", sp + additionalSingularityPoints); // Testing
+                    console.log("........................"); // Testing
+                    console.log(".................."); // Testing
+                    console.log("...."); // Testing 
+                }
+            }
+
             console.log("Player gained singularity points: ", sp); // Testing
-            this.singularityPointStock.playerPoints += sp;
+            this.singularityPointStock.playerPoints += (sp + additionalSingularityPoints);
             console.log("Players SP Stock: ", this.singularityPointStock.playerPoints); // Testing
             let playerSPCount= spContainer.list[9];
             playerSPCount.destroy();
@@ -1673,19 +2300,17 @@ export default class GameBattleScene extends Phaser.Scene {
 
             spContainer.addAt(this.playerSPText, 9);
 
-            if (attackWithMultiplier !== 0)
-            {
-                this.tweens.add({
-                    targets:  this.playerSPText,
-                    scaleX:   1.40,
-                    scaleY:   1.40,
-                    duration: 190,
-                    yoyo:     true,
-                    ease:     'Back.easeOut',
-                });
+            this.tweens.add({
+                targets:  this.playerSPText,
+                scaleX:   1.40,
+                scaleY:   1.40,
+                duration: 190,
+                yoyo:     true,
+                ease:     'Back.easeOut',
+            });
 
-                this._spFlaresBurst(cx - spPanelW / 4, spFinalY + spLocalY, true);
-            }
+            this._spFlaresBurst(cx - spPanelW / 4, spFinalY + spLocalY, true);
+            this._updateSCDSBuyButton();
         }
         else
         {
@@ -1705,19 +2330,20 @@ export default class GameBattleScene extends Phaser.Scene {
 
             spContainer.addAt(this.compSPText, 11);
 
-            if (attackWithMultiplier !== 0)
-            {
-                this.tweens.add({
-                    targets:  this.compSPText,
-                    scaleX:   1.40,
-                    scaleY:   1.40,
-                    duration: 190,
-                    yoyo:     true,
-                    ease:     'Back.easeOut',
-                });
+            // 0 sp means the attack was a miss: 
+            if (sp === 0) return;
 
-                this._spFlaresBurst(cx + spPanelW / 4, spFinalY + spLocalY, false);
-            }
+            this.tweens.add({
+                targets:  this.compSPText,
+                scaleX:   1.40,
+                scaleY:   1.40,
+                duration: 190,
+                yoyo:     true,
+                ease:     'Back.easeOut',
+            });
+
+            this._spFlaresBurst(cx + spPanelW / 4, spFinalY + spLocalY, false);
+            this._compAutobuySingularityCard();
         }
     }
 
@@ -1784,16 +2410,68 @@ export default class GameBattleScene extends Phaser.Scene {
         }
 
         if (completedSide === 'player') {
-            this.moveSelection.player = false;
-            this.moveSelection.comp   = true;
-            this.playerBattlePortrait.setDisplaySize(64, 64); 
-            this._updateTurnIndicator();
-            this.time.delayedCall(900, () => this._compTurn());
+            if (this.playerSingularityCardUse.cardObj !== null)
+            {
+                // NOVA BURST: Will allow the player to attack twice: 
+                if (this.playerSingularityCardUse.cardName === 'NOVA BURST')
+                {
+                    this.playerSingularityCardUse.turns -= 1;
+                    if (this.playerSingularityCardUse.turns <= 0)
+                    {
+                        this.moveSelection.player = false;
+                        this.moveSelection.comp   = true;
+
+                        // -- Computer Auditing System --
+                        // Audit if the Player or Comp has the next turn:
+                        computerAuditSystem.playerMove = this.moveSelection.player;
+                        computerAuditSystem.compMove   = this.moveSelection.comp;
+
+                        this.playerSingularityCardUse.cardObj = null;
+                        this.playerSingularityCardUse.cardName = null;
+                        this.playerSingularityCardUse.desc = null; 
+                        this.playerSingularityCardUse.turns = null; 
+                        this.time.delayedCall(900, () => this._compTurn()); 
+                    }
+                    else
+                    {
+                        this.moveSelection.player = true; 
+                        this.moveSelection.comp   = false; 
+
+                    }
+                    this.playerBattlePortrait.setDisplaySize(64, 64);
+                    this._updateTurnIndicator(); 
+                }
+            }
+            else
+            {
+                // --- Original Player Turn End Data ---
+                this.moveSelection.player = false;
+                this.moveSelection.comp   = true;
+
+                // -- Computer Auditing System --
+                // Audit if the Player or Comp has the next turn:
+                computerAuditSystem.playerMove = this.moveSelection.player;
+                computerAuditSystem.compMove   = this.moveSelection.comp;
+
+                this.playerBattlePortrait.setDisplaySize(64, 64); 
+                this._updateTurnIndicator();
+
+                if (this.compSwapState === null) this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.noSwap;
+                else if (this.compSwapState === 'Very High Protection For Supra') this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.normalSwap;
+                this.time.delayedCall(this.swapToAttackTimeFrame.timeFrame, () => this._compTurn());
+            }
+
         } else {
             this.compDefending        = false;
             this.playerDefending      = false;
             this.moveSelection.comp   = false;
             this.moveSelection.player = true;
+
+            // -- Computer Auditing System --
+            // Audit if the Player or Comp has the next turn:
+            computerAuditSystem.compMove = this.moveSelection.comp;
+            computerAuditSystem.playerMove = this.moveSelection.player;
+
             this.compBattlePortrait.setDisplaySize(64, 64); 
             this._updateTurnIndicator();
             this._setControlButtonsActive(true);
@@ -1878,4 +2556,730 @@ export default class GameBattleScene extends Phaser.Scene {
             }
         });
     }
+
+    // singularityCardDeckStation(): Holds up to 3 purchased Singularity Cards for each side.
+    // Buy button activates at ≥ 200 SP; deactivates when all 3 slots are occupied.
+    singularityCardDeckStation(){
+        // Note: New 'Singularity Cards have been added in the 'singularityCard.js' file. 
+        // this.SINGULARITY_CARDS = [
+        //     { id: 'nova_burst',     name: 'NOVA BURST',     cost: 200, color: 0xff4400, glow: 0xff8800, desc: '+2× ATK on next strike',  icon: '★' },
+        //     { id: 'void_shield',    name: 'VOID SHIELD',    cost: 250, color: 0x0055ff, glow: 0x00aaff, desc: 'Halve incoming damage',    icon: '◈' },
+        //     { id: 'stellar_mend',   name: 'STELLAR MEND',   cost: 300, color: 0x00ffcc, glow: 0x88ffdd, desc: 'Restore +30 ESSE',         icon: '✦' },
+        //     { id: 'quantum_strike', name: 'QUANTUM STRIKE', cost: 400, color: 0xbb00ff, glow: 0xee44ff, desc: 'Guaranteed critical hit',  icon: '⚡' },
+        // ];
+
+        this.scdsPlayerSlots    = [null, null, null];
+        this.scdsCompSlots      = [null, null, null];
+        this.scdsShopOpen       = false;
+        this.scdsShopContainer  = null;
+        this.scdsBuyBtn         = null;
+        this.scdsBuyBtnIcon     = null;
+        this.scdsBuyBtnLabel    = null;
+        this.scdsBuyBtnTween    = null;
+        this.scdsPlayerSlotCons = [];
+        this.scdsCompSlotCons   = [];
+
+        const { width }  = this.cameras.main;
+        const cx         = width / 2;
+        const csBottom   = 524;
+        const panelW     = 760;
+        const panelH     = 140;
+        const finalY     = csBottom + 8 + panelH / 2;   // 602
+        const headerY    = -panelH / 2 + 14;            // -56
+        const headerDivY = -panelH / 2 + 32;            // -38
+        const slotAreaCY = Math.round((headerDivY + panelH / 2) / 2);  // 16
+
+        this.scdsContainer  = this.add.container(cx, -(panelH + 20));
+        this.scdsPanelW     = panelW;
+        this.scdsSlotAreaCY = slotAreaCY;
+
+        // ── Glass body ─────────────────────────────────────────────────────
+        const panelBody  = this.add.rectangle(0, 0, panelW, panelH, 0x060010, 0.38).setOrigin(0.5);
+        const innerGlow  = this.add.ellipse(0, 0, panelW * 0.70, panelH * 0.60, 0x110022, 0.18);
+        const sheen      = this.add.rectangle(0, -panelH / 2 + 8, panelW - 20, 12, 0xccaaff, 0.07).setOrigin(0.5);
+        const tintH      = panelH - 44;
+        const playerTint = this.add.rectangle(-panelW / 4, slotAreaCY, panelW / 2 - 8, tintH, 0x0d0022, 0.25).setOrigin(0.5);
+        const compTint   = this.add.rectangle( panelW / 4, slotAreaCY, panelW / 2 - 8, tintH, 0x15000f, 0.25).setOrigin(0.5);
+
+        // ── Border & corners (purple/gold theme) ───────────────────────────
+        const borderG = this.add.graphics();
+        borderG.lineStyle(2, 0xaa44ff, 0.72);
+        borderG.strokeRect(-panelW / 2, -panelH / 2, panelW, panelH);
+        borderG.lineStyle(1, 0xffdd00, 0.28);
+        borderG.strokeRect(-panelW / 2 + 4, -panelH / 2 + 4, panelW - 8, panelH - 8);
+
+        const cornerG = this.add.graphics();
+        const cLen = 14;
+        [
+            [-panelW / 2, -panelH / 2,  1,  1],
+            [ panelW / 2, -panelH / 2, -1,  1],
+            [-panelW / 2,  panelH / 2,  1, -1],
+            [ panelW / 2,  panelH / 2, -1, -1],
+        ].forEach(([x, y, hd, vd]) => {
+            cornerG.lineStyle(3, 0xdd88ff, 1.0);
+            cornerG.beginPath();
+            cornerG.moveTo(x + hd * cLen, y);
+            cornerG.lineTo(x, y);
+            cornerG.lineTo(x, y + vd * cLen);
+            cornerG.strokePath();
+            cornerG.fillStyle(0xdd88ff, 1.0);
+            cornerG.fillCircle(x, y, 3);
+        });
+
+        // ── Header ─────────────────────────────────────────────────────────
+        const stationLabel = this.add.text(0, headerY, 'SINGULARITY CARD DECK STATION', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#cc99ff',
+        }).setOrigin(0.5).setAlpha(0.65);
+
+        const scdsIcon = this.add.text(0, headerY + 12, '◆  SCDS  ◆', {
+            fontFamily: 'monospace', fontSize: '9px', color: '#ffdd00',
+        }).setOrigin(0.5);
+        this.tweens.add({ targets: scdsIcon, alpha: 0.30, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+        const playerLabel = this.add.text(-panelW / 4, headerY, 'PLAYER', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#cc88ff',
+            stroke: '#0a0011', strokeThickness: 2,
+        }).setOrigin(0.5);
+
+        const compLabel = this.add.text(panelW / 4, headerY, 'COMPUTER', {
+            fontFamily: 'monospace', fontSize: '11px', color: '#ff66cc',
+            stroke: '#110008', strokeThickness: 2,
+        }).setOrigin(0.5);
+
+        const headerDivG = this.add.graphics();
+        headerDivG.lineStyle(1, 0xaa44ff, 0.22);
+        headerDivG.beginPath();
+        headerDivG.moveTo(-panelW / 2 + 20, headerDivY);
+        headerDivG.lineTo( panelW / 2 - 20, headerDivY);
+        headerDivG.strokePath();
+
+        const centerDivG = this.add.graphics();
+        centerDivG.lineStyle(1, 0xaa44ff, 0.25);
+        centerDivG.beginPath();
+        centerDivG.moveTo(0, headerDivY + 4);
+        centerDivG.lineTo(0, panelH / 2 - 6);
+        centerDivG.strokePath();
+
+        this.scdsContainer.add([
+            panelBody, innerGlow, sheen, playerTint, compTint,
+            borderG, cornerG,
+            stationLabel, scdsIcon, playerLabel, compLabel,
+            headerDivG, centerDivG,
+        ]);
+
+        this._buildSCDSSlotRow('player');
+        this._buildSCDSSlotRow('comp');
+        this._buildSCDSBuyButton();
+
+        this.tweens.add({
+            targets:  this.scdsContainer,
+            y:        finalY,
+            duration: 700,
+            ease:     'Back.easeOut',
+            delay:    750,
+        });
+    }
+
+    // _buildSCDSSlotRow(): Renders 3 singularity card slots for the given side.
+    _buildSCDSSlotRow(side){
+        const isPlayer    = side === 'player';
+        const panelW      = this.scdsPanelW;
+        const cy          = this.scdsSlotAreaCY;
+        const accentColor = isPlayer ? 0xaa44ff : 0xff44cc;
+        const slots       = isPlayer ? this.scdsPlayerSlots : this.scdsCompSlots;
+        const slotW       = 62;
+        const slotH       = 58;
+
+        // Destroy existing slot sub-containers
+        const existing = isPlayer ? this.scdsPlayerSlotCons : this.scdsCompSlotCons;
+        existing.forEach(c => { if (c?.active) { c.removeAll(true); c.destroy(); } });
+        if (isPlayer) this.scdsPlayerSlotCons = [];
+        else          this.scdsCompSlotCons   = [];
+
+        // Slot X positions — player: left of center divider; comp: right
+        const playerXs = [-310, -238, -166];
+        const compXs   = [ 166,  238,  310];
+        const slotXs   = isPlayer ? playerXs : compXs;
+        const conList  = isPlayer ? this.scdsPlayerSlotCons : this.scdsCompSlotCons;
+
+        for (let i = 0; i < 3; i++){
+            const slotCon = this.add.container(0, 0);
+            const card    = slots[i];
+            const sx      = slotXs[i];
+            const sy      = cy;
+
+            // Slot background
+            const slotBg = this.add.rectangle(sx, sy, slotW, slotH, 0x060012, 0.76).setOrigin(0.5);
+            slotBg.setStrokeStyle(1.5, accentColor, card ? 0.80 : 0.28);
+
+            // Corner dashes
+            const slotG = this.add.graphics();
+            const dl    = 9;
+            [
+                [sx - slotW / 2, sy - slotH / 2,  1,  1],
+                [sx + slotW / 2, sy - slotH / 2, -1,  1],
+                [sx - slotW / 2, sy + slotH / 2,  1, -1],
+                [sx + slotW / 2, sy + slotH / 2, -1, -1],
+            ].forEach(([cx2, cy2, hd, vd]) => {
+                slotG.lineStyle(2, accentColor, card ? 0.85 : 0.30);
+                slotG.beginPath();
+                slotG.moveTo(cx2 + hd * dl, cy2);
+                slotG.lineTo(cx2, cy2);
+                slotG.lineTo(cx2, cy2 + vd * dl);
+                slotG.strokePath();
+            });
+
+            slotCon.add([slotBg, slotG]);
+
+            if (card){
+                const hexC = '#' + card.color.toString(16).padStart(6, '0');
+
+                // Pulsing aura
+                const aura = this.add.ellipse(sx, sy, slotW + 14, slotH + 14, card.glow, 0.13);
+                this.tweens.add({
+                    targets: aura, alpha: 0.25, scaleX: 1.12, scaleY: 1.12,
+                    duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                });
+
+                const iconT = this.add.text(sx, sy - 11, card.icon, {
+                    fontFamily: 'monospace', fontSize: '20px', color: hexC,
+                }).setOrigin(0.5);
+
+                const nameT = this.add.text(sx, sy + 14, card.name.split(' ')[0], {
+                    fontFamily: 'monospace', fontSize: '6.5px', color: '#ddbbff',
+                }).setOrigin(0.5);
+
+                slotCon.add([aura, iconT, nameT]);
+
+                console.log("Singularity Card Ready: ", card); // Testing
+                for(const key in card){
+                    console.log(card[key]); // Testing 
+                }
+                
+                // If the ...
+                if (isPlayer){
+                    const clickableSlot = slotCon.list[0];
+                    clickableSlot.setInteractive({ useHandCursor: true }); 
+                    clickableSlot.on('pointerdown', () => {
+                        this._useSingularityCard('Player', card, slotCon);
+                    });
+                }
+                else
+                {
+                    // ... Computer intelligence (AI) for using their Singularity Cards ...
+                    // ... Determine if the computer needs to use one of their Singularity Cards ...
+                    this._useSingularityCard('Comp', card, slotCon); 
+                }
+
+            } else {
+                const emptyT = this.add.text(sx, sy, '—', {
+                    fontFamily: 'monospace', fontSize: '16px', color: '#2a1a44',
+                }).setOrigin(0.5);
+                slotCon.add(emptyT);
+            }
+
+            this.scdsContainer.add(slotCon);
+            conList.push(slotCon);
+        }
+    }
+
+    // _buildSCDSBuyButton(): Constructs the player-side Buy button.
+    _buildSCDSBuyButton(){
+        const cy     = this.scdsSlotAreaCY;
+        const btnX   = -72;
+        const btnW   = 74;
+        const btnH   = 56;
+        const canBuy = this.singularityPointStock.playerPoints >= 200
+                    && this.scdsPlayerSlots.some(s => s === null);
+
+        const btnBg = this.add.rectangle(btnX, cy, btnW, btnH, canBuy ? 0x220044 : 0x0a0010, 0.92).setOrigin(0.5);
+        btnBg.setStrokeStyle(2, canBuy ? 0xaa44ff : 0x332244, canBuy ? 0.85 : 0.30);
+
+        const btnIcon = this.add.text(btnX, cy - 13, '◆', {
+            fontFamily: 'monospace', fontSize: '14px', color: canBuy ? '#dd88ff' : '#331144',
+        }).setOrigin(0.5);
+
+        const btnLabel = this.add.text(btnX, cy + 5, 'BUY', {
+            fontFamily: 'monospace', fontSize: '12px', color: canBuy ? '#cc88ff' : '#331144',
+        }).setOrigin(0.5);
+
+        const costHint = this.add.text(btnX, cy + btnH / 2 + 6, '≥ 200 SP', {
+            fontFamily: 'monospace', fontSize: '7px', color: '#442266',
+        }).setOrigin(0.5);
+
+        this.scdsBuyBtn      = btnBg;
+        this.scdsBuyBtnIcon  = btnIcon;
+        this.scdsBuyBtnLabel = btnLabel;
+
+        if (canBuy){
+            btnBg.setInteractive({ useHandCursor: true });
+            btnBg.on('pointerover', () => btnBg.setFillStyle(0x3a0066, 0.95));
+            btnBg.on('pointerout',  () => btnBg.setFillStyle(0x220044, 0.92));
+            btnBg.on('pointerdown', () => this._openSingularityShop());
+            this.scdsBuyBtnTween = this.tweens.add({
+                targets: btnBg, alpha: 0.72, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            });
+        }
+
+        this.scdsContainer.add([btnBg, btnIcon, btnLabel, costHint]);
+    }
+
+    // _updateSCDSBuyButton(): Enables or disables the Buy button based on SP and available slots.
+    _updateSCDSBuyButton(){
+        if (!this.scdsBuyBtn) return;
+        const canBuy = this.singularityPointStock.playerPoints >= 200
+                    && this.scdsPlayerSlots.some(s => s === null);
+
+        if (canBuy){
+            this.scdsBuyBtn.setFillStyle(0x220044, 0.92);
+            this.scdsBuyBtn.setStrokeStyle(2, 0xaa44ff, 0.85);
+            this.scdsBuyBtn.setAlpha(1.0);
+            this.scdsBuyBtn.setInteractive({ useHandCursor: true });
+            this.scdsBuyBtn.off('pointerover').off('pointerout').off('pointerdown');
+            this.scdsBuyBtn.on('pointerover', () => this.scdsBuyBtn.setFillStyle(0x3a0066, 0.95));
+            this.scdsBuyBtn.on('pointerout',  () => this.scdsBuyBtn.setFillStyle(0x220044, 0.92));
+            this.scdsBuyBtn.on('pointerdown', () => this._openSingularityShop());
+            if (this.scdsBuyBtnIcon)  this.scdsBuyBtnIcon.setColor('#dd88ff');
+            if (this.scdsBuyBtnLabel) this.scdsBuyBtnLabel.setColor('#cc88ff');
+            if (!this.scdsBuyBtnTween || !this.scdsBuyBtnTween.isPlaying()){
+                this.scdsBuyBtnTween = this.tweens.add({
+                    targets: this.scdsBuyBtn, alpha: 0.72, duration: 1000,
+                    yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                });
+            }
+        } else {
+            this.scdsBuyBtn.removeInteractive();
+            this.scdsBuyBtn.setFillStyle(0x0a0010, 0.92);
+            this.scdsBuyBtn.setStrokeStyle(2, 0x332244, 0.30);
+            this.scdsBuyBtn.setAlpha(0.50);
+            if (this.scdsBuyBtnIcon)  this.scdsBuyBtnIcon.setColor('#331144');
+            if (this.scdsBuyBtnLabel) this.scdsBuyBtnLabel.setColor('#331144');
+            if (this.scdsBuyBtnTween){
+                this.scdsBuyBtnTween.stop();
+                this.scdsBuyBtnTween = null;
+                this.scdsBuyBtn.setAlpha(0.50);
+            }
+        }
+    }
+
+    // _openSingularityShop(): Slides in a beautiful cosmic purchase window from the right.
+    _openSingularityShop(){
+        if (this.scdsShopOpen) return;
+        this.scdsShopOpen = true;
+
+        const { width, height } = this.cameras.main;
+        const cx = width  / 2;
+        const cy = height / 2;
+
+        const shopW = 700;
+        const shopH = 480;
+
+        const shopCon = this.add.container(width + shopW, cy);
+        this.scdsShopContainer = shopCon;
+
+        // ── Layered cosmic background ───────────────────────────────────────
+        const backdrop = this.add.rectangle(0, 0, shopW, shopH, 0x06001a, 0.97).setOrigin(0.5);
+        const neb1     = this.add.ellipse(-90, -65, 430, 200, 0x4400bb, 0.09);
+        const neb2     = this.add.ellipse( 70,  75, 370, 170, 0xbb0066, 0.07);
+        const neb3     = this.add.ellipse(  0, -20, 210, 120, 0x0044cc, 0.06);
+
+        // Interior starfield
+        const starG = this.add.graphics();
+        for (let i = 0; i < 52; i++){
+            const sx    = Phaser.Math.Between(-shopW / 2 + 8, shopW / 2 - 8);
+            const sy    = Phaser.Math.Between(-shopH / 2 + 8, shopH / 2 - 8);
+            const alpha = Math.random() * 0.35 + 0.08;
+            const r     = Math.random() > 0.78 ? 1.5 : 1;
+            starG.fillStyle(0xffffff, alpha);
+            starG.fillCircle(sx, sy, r);
+        }
+
+        // ── Borders & glow ─────────────────────────────────────────────────
+        const ambGlow = this.add.rectangle(0, 0, shopW + 30, shopH + 30, 0xaa44ff, 0.07).setOrigin(0.5);
+
+        const borderG = this.add.graphics();
+        borderG.lineStyle(3, 0xaa44ff, 0.90);
+        borderG.strokeRect(-shopW / 2, -shopH / 2, shopW, shopH);
+        borderG.lineStyle(1, 0xffdd00, 0.32);
+        borderG.strokeRect(-shopW / 2 + 6, -shopH / 2 + 6, shopW - 12, shopH - 12);
+        borderG.lineStyle(1, 0xaa44ff, 0.14);
+        borderG.strokeRect(-shopW / 2 + 11, -shopH / 2 + 11, shopW - 22, shopH - 22);
+
+        // Gem corner accents
+        const cornerG = this.add.graphics();
+        const cL = 24;
+        [
+            [-shopW / 2, -shopH / 2,  1,  1],
+            [ shopW / 2, -shopH / 2, -1,  1],
+            [-shopW / 2,  shopH / 2,  1, -1],
+            [ shopW / 2,  shopH / 2, -1, -1],
+        ].forEach(([x, y, hd, vd]) => {
+            cornerG.fillStyle(0xaa44ff, 0.22);
+            cornerG.fillCircle(x, y, 11);
+            cornerG.lineStyle(4, 0xdd88ff, 1.0);
+            cornerG.beginPath();
+            cornerG.moveTo(x + hd * cL, y);
+            cornerG.lineTo(x, y);
+            cornerG.lineTo(x, y + vd * cL);
+            cornerG.strokePath();
+            cornerG.fillStyle(0xffffff, 1.0);
+            cornerG.fillCircle(x, y, 4.5);
+        });
+
+        // ── Title bar ──────────────────────────────────────────────────────
+        const titleBarBg = this.add.rectangle(0, -shopH / 2 + 30, shopW - 14, 48, 0x15003a, 0.90).setOrigin(0.5);
+
+        const titleText = this.add.text(0, -shopH / 2 + 21, '✦  SINGULARITY CARD SHOP  ✦', {
+            fontFamily: 'monospace', fontSize: '18px', color: '#ee99ff',
+            stroke: '#0a001a', strokeThickness: 4,
+        }).setOrigin(0.5);
+        this.tweens.add({ targets: titleText, alpha: 0.72, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+        const titleSub = this.add.text(0, -shopH / 2 + 41, `PLAYER SP: ${this.singularityPointStock.playerPoints}   ·   Choose a card to purchase`, {
+            fontFamily: 'monospace', fontSize: '9.5px', color: '#7744aa',
+        }).setOrigin(0.5);
+
+        const titleDivG = this.add.graphics();
+        titleDivG.lineStyle(1, 0xaa44ff, 0.30);
+        titleDivG.beginPath();
+        titleDivG.moveTo(-shopW / 2 + 18, -shopH / 2 + 57);
+        titleDivG.lineTo( shopW / 2 - 18, -shopH / 2 + 57);
+        titleDivG.strokePath();
+
+        // Close button (top-right)
+        const closeBtn = this.add.text(shopW / 2 - 22, -shopH / 2 + 18, '✕', {
+            fontFamily: 'monospace', fontSize: '16px', color: '#773399',
+            stroke: '#000000', strokeThickness: 2,
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        closeBtn.on('pointerover', () => closeBtn.setColor('#ff55ff'));
+        closeBtn.on('pointerout',  () => closeBtn.setColor('#773399'));
+        closeBtn.on('pointerdown', () => this._closeSingularityShop());
+
+        shopCon.add([
+            backdrop, neb1, neb2, neb3, starG, ambGlow,
+            borderG, cornerG,
+            titleBarBg, titleText, titleSub, titleDivG,
+            closeBtn,
+        ]);
+
+        // ── Card grid (scrollable, 4 per row) ──────────────────────────────
+        const cardsPerRow  = 4;
+        const cardW        = 130;
+        const cardH        = 200;
+        const colGap       = 14;
+        const rowGap       = 16;
+
+        const scrollViewTop = -shopH / 2 + 62;
+        const scrollViewBot =  shopH / 2 - 30;
+        const viewH         = scrollViewBot - scrollViewTop;
+
+        const nRows      = Math.ceil(SINGULARITY_CARDS.length / cardsPerRow);
+        const rowW       = cardsPerRow * cardW + (cardsPerRow - 1) * colGap;
+        const totalGridH = nRows * cardH + (nRows - 1) * rowGap;
+        const maxScroll  = Math.max(0, totalGridH - viewH);
+
+        let scrollOffset = 0;
+
+        const scrollCon = this.add.container(0, 0);
+
+        SINGULARITY_CARDS.forEach((def, i) => {
+            const col = i % cardsPerRow;
+            const row = Math.floor(i / cardsPerRow);
+
+            const lx = -rowW / 2 + cardW / 2 + col * (cardW + colGap);
+            const ly = scrollViewTop + cardH / 2 + row * (cardH + rowGap);
+
+            const canAfford = this.singularityPointStock.playerPoints >= def.cost;
+            const hexC      = '#' + def.color.toString(16).padStart(6, '0');
+
+            const cc = this.add.container(lx, ly);
+
+            // Outer glow ellipse
+            const glowE = this.add.ellipse(0, 0, cardW + 22, cardH + 22, def.glow, canAfford ? 0.13 : 0.03);
+            if (canAfford){
+                this.tweens.add({
+                    targets: glowE, scaleX: 1.10, scaleY: 1.10, alpha: 0.24,
+                    duration: 1200 + i * 160, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+                });
+            }
+
+            // Card body
+            const cb = this.add.rectangle(0, 0, cardW, cardH, 0x0c001f, canAfford ? 0.96 : 0.70).setOrigin(0.5);
+            cb.setStrokeStyle(2, def.color, canAfford ? 0.80 : 0.22);
+
+            // Colored top band
+            const tb = this.add.rectangle(0, -cardH / 2 + 22, cardW, 40, def.color, canAfford ? 0.28 : 0.07).setOrigin(0.5);
+
+            // Large icon
+            const iconT = this.add.text(0, -cardH / 2 + 22, def.icon, {
+                fontFamily: 'monospace', fontSize: '28px', color: canAfford ? hexC : '#282828',
+            }).setOrigin(0.5);
+
+            // Card name
+            const nameT = this.add.text(0, -cardH / 2 + 56, def.name, {
+                fontFamily: 'monospace', fontSize: '8px', color: canAfford ? '#eeddff' : '#282828',
+                align: 'center', wordWrap: { width: cardW - 10 },
+            }).setOrigin(0.5);
+
+            // Thin divider
+            const cdiv = this.add.graphics();
+            cdiv.lineStyle(1, def.color, canAfford ? 0.35 : 0.10);
+            cdiv.beginPath();
+            cdiv.moveTo(-cardW / 2 + 8, -cardH / 2 + 70);
+            cdiv.lineTo( cardW / 2 - 8, -cardH / 2 + 70);
+            cdiv.strokePath();
+
+            // Description
+            const descT = this.add.text(0, -cardH / 2 + 108, def.desc, {
+                fontFamily: 'monospace', fontSize: '7.5px', color: canAfford ? '#ccaaee' : '#1e1e1e',
+                align: 'center', wordWrap: { width: cardW - 12 },
+            }).setOrigin(0.5);
+
+            // Cost badge
+            const costBg = this.add.rectangle(0, cardH / 2 - 48, cardW - 20, 24, def.color, canAfford ? 0.22 : 0.07).setOrigin(0.5);
+            costBg.setStrokeStyle(1, def.color, canAfford ? 0.55 : 0.12);
+            const costT = this.add.text(0, cardH / 2 - 48, `${def.cost} SP`, {
+                fontFamily: 'monospace', fontSize: '11px', color: canAfford ? '#ffdd00' : '#282828',
+            }).setOrigin(0.5);
+
+            // Purchase button
+            const pbg = this.add.rectangle(0, cardH / 2 - 20, cardW - 20, 24, canAfford ? 0x280050 : 0x0d0d0d, canAfford ? 0.94 : 0.60).setOrigin(0.5);
+            pbg.setStrokeStyle(1.5, canAfford ? 0xaa44ff : 0x1a1a1a, canAfford ? 0.85 : 0.20);
+            const plabel = this.add.text(0, cardH / 2 - 20, canAfford ? 'PURCHASE' : 'LOCKED', {
+                fontFamily: 'monospace', fontSize: '9px', color: canAfford ? '#cc88ff' : '#252525',
+            }).setOrigin(0.5);
+
+            if (canAfford){
+                pbg.setInteractive({ useHandCursor: true });
+                pbg.on('pointerover', () => {
+                    pbg.setFillStyle(0x4a0088, 0.96);
+                    this.tweens.add({ targets: cc, y: ly - scrollOffset - 6, duration: 100, ease: 'Power2' });
+                });
+                pbg.on('pointerout', () => {
+                    pbg.setFillStyle(0x280050, 0.94);
+                    this.tweens.add({ targets: cc, y: ly - scrollOffset, duration: 100, ease: 'Power2' });
+                });
+                pbg.on('pointerdown', () => this._buySingularityCard(def));
+            }
+
+            cc.add([glowE, cb, tb, iconT, nameT, cdiv, descT, costBg, costT, pbg, plabel]);
+            scrollCon.add(cc);
+        });
+
+        shopCon.add(scrollCon);
+
+        // Scroll hint arrows (visible only when content overflows)
+        if (maxScroll > 0){
+            const hintT = this.add.text(shopW / 2 - 14, 0, '▲\n▼', {
+                fontFamily: 'monospace', fontSize: '9px', color: '#553377',
+                align: 'center', lineSpacing: 10,
+            }).setOrigin(0.5);
+            shopCon.add(hintT);
+        }
+
+        // Mouse-wheel scrolling
+        const onWheel = (pointer, gameObjects, deltaX, deltaY) => {
+            if (!this.scdsShopOpen) return;
+            scrollOffset = Phaser.Math.Clamp(scrollOffset + deltaY * 0.5, 0, maxScroll);
+            scrollCon.list.forEach((cc, i) => {
+                const col = i % cardsPerRow;
+                const row = Math.floor(i / cardsPerRow);
+                const lx  = -rowW / 2 + cardW / 2 + col * (cardW + colGap);
+                const ly  = scrollViewTop + cardH / 2 + row * (cardH + rowGap) - scrollOffset;
+                cc.setPosition(lx, ly);
+            });
+        };
+        this.input.on('wheel', onWheel);
+        this.scdsShopWheelHandler = onWheel;
+
+        // ── Footer strip ───────────────────────────────────────────────────
+        const footerBg = this.add.rectangle(0, shopH / 2 - 15, shopW - 14, 24, 0x0c0026, 0.72).setOrigin(0.5);
+        const footerT  = this.add.text(0, shopH / 2 - 15, 'Cards fill deck slots — Buy button re-enables when a slot opens', {
+            fontFamily: 'monospace', fontSize: '7.5px', color: '#442266',
+        }).setOrigin(0.5);
+        shopCon.add([footerBg, footerT]);
+
+        this.children.bringToTop(shopCon);
+
+        // Clip mask uses world coords (not inside any container) so Phaser's stencil aligns correctly.
+        // Created off display-list so it is never rendered visually.
+        const maskG = this.make.graphics({ add: false });
+        maskG.fillStyle(0xffffff, 1);
+        maskG.fillRect(cx - shopW / 2 + 14, cy + scrollViewTop, shopW - 28, viewH);
+        this.scdsShopMaskG = maskG;
+
+        // Slide in, then apply mask once the container is at its final world position
+        this.tweens.add({
+            targets:    shopCon,
+            x:          cx,
+            duration:   650,
+            ease:       'Back.easeOut',
+            onComplete: () => {
+                if (scrollCon.active) {
+                    scrollCon.setMask(maskG.createGeometryMask());
+                }
+            },
+        });
+    }
+
+    // _closeSingularityShop(): Slides the shop panel back off screen to the right.
+    _closeSingularityShop(){
+        if (!this.scdsShopOpen || !this.scdsShopContainer) return;
+        const { width } = this.cameras.main;
+
+        if (this.scdsShopWheelHandler){
+            this.input.off('wheel', this.scdsShopWheelHandler);
+            this.scdsShopWheelHandler = null;
+        }
+
+        this.tweens.add({
+            targets:    this.scdsShopContainer,
+            x:          width + 420,
+            duration:   500,
+            ease:       'Power2.easeIn',
+            onComplete: () => {
+                if (this.scdsShopContainer){
+                    this.scdsShopContainer.destroy();
+                    this.scdsShopContainer = null;
+                }
+                if (this.scdsShopMaskG){
+                    this.scdsShopMaskG.destroy();
+                    this.scdsShopMaskG = null;
+                }
+                this.scdsShopOpen = false;
+            },
+        });
+    }
+
+    // _buySingularityCard(): Deducts SP, fills the first empty player slot, rebuilds UI.
+    _buySingularityCard(def){
+        const emptyIdx = this.scdsPlayerSlots.findIndex(s => s === null);
+        if (emptyIdx === -1 || this.singularityPointStock.playerPoints < def.cost) return;
+
+        this.singularityPointStock.playerPoints -= def.cost;
+
+        // Update the SP display in the SP station
+        const spContainer = this.children.getByName('spContainer');
+        if (spContainer){
+            const spPanelW = 760;
+            const old = spContainer.list[9];
+            if (old) old.destroy();
+            const newTxt = this.add.text(-spPanelW / 4, 13, `${this.singularityPointStock.playerPoints} SP`, {
+                fontFamily: 'monospace', fontSize: '22px', color: '#ffffff',
+                stroke: '#002211', strokeThickness: 4,
+            }).setOrigin(0.5);
+            spContainer.addAt(newTxt, 9);
+            this.playerSPText = newTxt;
+        }
+
+        this.scdsPlayerSlots[emptyIdx] = def;
+        this._closeSingularityShop();
+        this._buildSCDSSlotRow('player');
+        this._updateSCDSBuyButton();
+    }
+
+    // _compAutobuySingularityCard(): AI purchases the most expensive affordable card when SP allows.
+    _compAutobuySingularityCard(){
+        if (!SINGULARITY_CARDS || !this.scdsCompSlots) return;
+
+        const emptyIdx = this.scdsCompSlots.findIndex(s => s === null);
+        if (emptyIdx === -1) return;
+
+        const affordable = [...SINGULARITY_CARDS]
+            .filter(def => this.singularityPointStock.compPoints >= def.cost)
+            .sort((a, b) => b.cost - a.cost);
+
+        if (affordable.length === 0) return;
+
+        const def = affordable[0];
+        this.singularityPointStock.compPoints -= def.cost;
+
+        // Update the SP display in the SP station
+        const spContainer = this.children.getByName('spContainer');
+        if (spContainer){
+            const spPanelW = 760;
+            const old = spContainer.list[11];
+            if (old) old.destroy();
+            const newTxt = this.add.text(spPanelW / 4, 13, `${this.singularityPointStock.compPoints} SP`, {
+                fontFamily: 'monospace', fontSize: '22px', color: '#ffffff',
+                stroke: '#221100', strokeThickness: 4,
+            }).setOrigin(0.5);
+            spContainer.addAt(newTxt, 11);
+            this.compSPText = newTxt;
+        }
+
+        this.scdsCompSlots[emptyIdx] = def;
+        this._buildSCDSSlotRow('comp');
+    }
+
+    // _useSingularityCard(): Will use the singularity card in the battle arena.
+    _useSingularityCard(scUser, singularityCard, slotCon){
+        if (scUser === 'Player')
+        {
+            //--------------------------------------------------------------------
+            // Empty text for when the player uses a singularity card:
+            // const emptyT = this.add.text(sx, sy, '—', {
+            //     fontFamily: 'monospace', fontSize: '16px', color: '#2a1a44',
+            // }).setOrigin(0.5);
+            //--------------------------------------------------------------------
+
+            console.log('Singularity Card Slots Array: ', this.scdsPlayerSlotCons); // Testing 
+            console.log('Singularity Card Slots Container: ', this.scdsContainer); // Testing 
+            console.log('Singularity Card Slot: ', slotCon); // Testing 
+            console.log('Singularity Card For Use: ', singularityCard); // Testing 
+            console.log('Singularity Card Used: ', singularityCard.name); // Testing
+            if (singularityCard.name === 'NOVA BURST')
+            {
+                // ...
+                let scdsPlayerSlotIndex = 0; 
+
+                // NOVA BURST => Battle card will attack twice for the next attack with any card:
+                this.playerSingularityCardUse.cardObj = singularityCard;
+                this.playerSingularityCardUse.cardName = singularityCard.name;
+                this.playerSingularityCardUse.desc = singularityCard.desc;
+                this.playerSingularityCardUse.turns = 2; 
+
+                // Gather the important child objects in the 'Singularity Card Slot Container': 
+                const slotBg = slotCon.list[0];
+                const slotG = slotCon.list[1]; 
+                const sx = slotCon.list[2].x;
+                const sy = slotCon.list[2].y;
+                const aura = slotCon.list[2]; 
+                const iconT = slotCon.list[3];
+                const nameT = slotCon.list[4];
+
+                // Find the tween 'Aura' tween and destroy it:
+                this.tweens.killTweensOf(aura); 
+
+                // ...
+                this.scdsPlayerSlotCons.forEach((slot, index) => {
+                    if (slot === slotCon)
+                    {
+                        console.log('Found!'); // Testing 
+                        this.scdsPlayerSlots[index] = null;  
+                    }
+                });
+
+                // Remove all the previous 'Singularity Card' icons after it has been clicked:
+                // slotCon.remove(aura, true); 
+                // slotCon.remove(iconT, true);
+                // slotCon.remove(nameT, true); 
+                this.scdsContainer.removeBetween(16, 23, true);
+
+                this._buildSCDSSlotRow('player');
+                this._buildSCDSSlotRow('comp'); 
+                
+                // Add a new 'Empty' Text object to the 'Singularity Card Slot Container':
+                // const emptyT = this.add.text(sx, sy, '—', {
+                //     fontFamily: 'monospace', fontSize: '16px', color: '#2a1a44',
+                // }).setOrigin(0.5);
+                // slotCon.add(emptyT); 
+            }
+        }
+        else if (scUser === 'Comp')
+        {
+            console.log('Computer might use Singularity Card'); // Testing 
+        }
+    }
+
 }
