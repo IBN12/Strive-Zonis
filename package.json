@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node --watch server",
-    "start": "electron .",
+    "start": "node server.js",
+    "db:migrate": "psql -h localhost -U postgres -d strive_zonis -f db/schema.sql",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
@@ -25,7 +26,16 @@
   },
   "homepage": "https://github.com/IBN12/Strive-Zonis#readme",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "pg": "^8.23.0",
     "phaser": "^4.2.1"
   },
   "devDependencies": {

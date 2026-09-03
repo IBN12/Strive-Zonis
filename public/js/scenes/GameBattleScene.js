@@ -17,14 +17,39 @@ export default class GameBattleScene extends Phaser.Scene {
         this.firstMoveComplete = false; 
         this.compWillAttack = false; 
         this.compWillDefend = false;
+        this.decisionTreeCalled = false; 
+
         this.playerTotalPreviousCardSwaps = 0; 
-        this.compSwapState = null;
+        this.compSwapState = 'Basic Tempo';
+        this.compSwapMeter = 0;
+
+        this.playerAttksWithSupra = 0;
+        this.playerSupraAttked = 0;
+        this.playerAttksWithSupra = 0;
+        this.playerFereAttked = 0;
+        this.playerAttksWithFere = 0;
+        this.playerBonumAttked = 0;
+        this.playerAttksWithBonum = 0;  
+
         this.swapToAttackTimeFrame = {
-            noSwap: 900,
-            normalSwap: 1100,
+            basicTempoTime: 900,
+            protectSupraHighTime: 1100,
             timeFrame: null,
         }
+        this.confidenceSwapPts = {
+            mainPts: 5,
+            maxPts: 5,
+            minPts: 0, 
+            confidence: 0,
+            noConfidence: 0, 
+        }
+        this.compActions = {
+            attack: false,
+            defend: false,
+            swap: false, 
+        }
 
+        // Default Properties: 
         this.moveSelection = {
             player: false,
             comp: false,
@@ -90,6 +115,53 @@ export default class GameBattleScene extends Phaser.Scene {
 
         this.playerPreviousAttkPtWithMultiplier = null
         this.compPreviousAttkPtWithMultiplier   = null;
+
+        this.allCompAttkMultipliers = [
+            {
+                cate: 'Supra',
+                multipliers: [], 
+                miss: 0,
+                crit: 0,
+                oneHalf: 0,
+                twoThird: 0,
+                threeFourth: 0,
+            }, 
+            {
+                cate: 'Fere',
+                multipliers: [],
+                miss: 0,
+                crit: 0,
+                oneHalf: 0,
+                twoThird: 0,
+                threeFourth: 0,
+            },
+            {
+                cate: 'Bonum',
+                multipliers: [], 
+                miss: 0,
+                crit: 0,
+                oneHalf: 0,
+                twoThird: 0,
+                threeFourth: 0,
+            },
+        ];
+        this.allPlayerAttkMultipliers = [
+            {
+                cate: 'Supra', 
+                multipliers: [], 
+            },
+            {
+                cate: 'Fere',
+                multipliers: [],
+            },
+            {
+                cate: 'Bonum',
+                multipliers: [], 
+            }, 
+        ]; 
+
+        this.allCompAttksWithMultiplier = []; 
+        this.allPlayerAttksWithMultiplier = [];
     }
 
     preload(){
@@ -1280,7 +1352,8 @@ export default class GameBattleScene extends Phaser.Scene {
         const pSize       = 48;
 
         // Reset comp deck index:
-        this.compDeckIndex.length = 0; 
+        this.compDeckIndex.length = 0;
+        this.compDeckIndex = [];  
 
         // Spread 3 slots evenly within each half using equal outer + inter-card spacing
         const halfW    = panelW / 2;   // 380
@@ -1464,7 +1537,7 @@ export default class GameBattleScene extends Phaser.Scene {
         {
             if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra')
             {
-                this._swapCompCard(); 
+                // this._swapCompCard(); 
 
                 this.firstMoveComplete = true; 
             }
@@ -1481,107 +1554,400 @@ export default class GameBattleScene extends Phaser.Scene {
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // New: Phase 2 Tempo Swtiching with pattern states: 
-        if (this.firstMoveComplete)
+        console.log('Decision Tree Called: ', this.decisionTreeCalled); // Testing 
+        if (this.firstMoveComplete && !this.decisionTreeCalled)
         {
-            if (this.compAllCards[this.compActiveCardIndex].cate === "Supra")
+            // // Read the player card swap pattern: 
+            // if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
+            // {
+            //     this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
+            //     this._readPlayerCardSwapPattern(); 
+            // }
+
+            this._compSwapIntel();
+
+            // The comp swap card state: 
+            // this._swapCompCardState(this.compSwapState); 
+        }
+    }
+
+    // _compSwapIntel(): Computer will find ways to swap based on game properties:
+    _compSwapIntel(){
+        if (this.compSwapState === 'Basic Tempo')
+        {
+            if (this.playerSelectedCards[this.playerActiveCardKey].cate === 'Supra')
             {
-                if (this.playerPreviousAttkMultiplier === 0)
+                // WGO: The computer knows which category card is on the table.
+                console.log('Supra!'); // Testing 
+                if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra')
                 {
-                    // add .5 x3 confindence points: 
-                }
-                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
-                {
-                    // subtract .5 confidence points:
-                }
-                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
-                {
-                    // subtract .5 x2 confidence points:
-                }
-                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
-                {
-                    // subtract .5 x3 confidence points:
-                }
-                else if (this.playerPreviousAttkMultiplier === 1)
-                {
-                    // subtract .5 x4 confidence points:
-                }
+                    console.log('Player Supra Vs Comp Supra'); // Testing
+                    // 1
+                    this.confidenceSwapPts.confidence++;
 
-                // Read the player card swap pattern:  
-                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
-                {
-                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
+                    // Logic: Compare Attk, Def, Esse, Cate => Computer has to read the stats in order to make its decision.
+                    // Compare Player Atk to Comp Atk:
+                    if (this.playerSelectedCards[this.playerActiveCardKey].atk > this.compAllCards[this.compActiveCardIndex].atk)
+                    {
+                        // -1
+                        this.confidenceSwapPts.noConfidence++;
+                    }
+                    else if (this.playerSelectedCards[this.playerActiveCardKey].atk === this.compAllCards[this.compActiveCardIndex].atk)
+                    {
+                        // 1
+                        this.confidenceSwapPts.confidence++;
+                    }
+                    else
+                    {
+                        // 1
+                        this.confidenceSwapPts.confidence++;
+                    }
 
-                    // Only reads the players swap pattern. 
-                    this._readPlayerCardSwapPattern(); 
+                    // Compare Player Def to Comp Def:
+                    if (this.playerSelectedCards[this.playerActiveCardKey].def > this.compAllCards[this.compActiveCardIndex].def)
+                    {
+                        // -1
+                        this.confidenceSwapPts.noConfidence++;
+                    }
+                    else if (this.playerSelectedCards[this.playerActiveCardKey].def === this.compAllCards[this.compActiveCardIndex].def)
+                    {
+                        // 1
+                        this.confidenceSwapPts.confidence++;
+                    }
+                    else
+                    {
+                        // 1
+                        this.confidenceSwapPts.confidence++;
+                    }
+
+                    // Compare Player Esse to Comp Esse:
+                    if (this.playerCardEsse[this.playerActiveCardKey] > this.compCardEsse[this.compActiveCardIndex])
+                    {
+                        // -1
+                        this.confidenceSwapPts.noConfidence++;
+                    }
+                    else if (this.playerCardEsse[this.playerActiveCardKey] === this.compCardEsse[this.compActiveCardIndex])
+                    {
+                        // 1
+                        this.confidenceSwapPts.confidence++; 
+                    }
+                    else
+                    {
+                        // 1 
+                        this.confidenceSwapPts.confidence++;
+                    }
+
+                    // Logic: 1 => Confident, -1 => Not Confident 
+                    /** |Confidnece/No Confidence Ratio|
+                     * ==> Player Supra vs Comp Supra:
+                     * => 4 Confidence / 0 No Confidence => Pure Attack
+                     * => 3 Confidence / 1 No Confidence => Decision Tree Based On Stats
+                     * => 2 Confidence / 2 No Confidence => Decision Tree Based On Stats
+                     * => 1 Confidence / 3 No Confidence => Decision Tree Based On Stats
+                    */
+                    
+                    // Confidence/No Confidence Ratio Calculation:
+                    if (this.confidenceSwapPts.confidence === 4 && this.confidenceSwapPts.noConfidence === 0)
+                    {
+                        // console.log('Pure Attack!'); // Testing
+                        console.log('TESTING THE DECISION TREE!'); // Testing
+                        this._decisionTree(); // Testing
+                        if (this.moveSelection.comp) this.compActions.attack = true; 
+                    }
+                    else
+                    {
+                        console.log('Decision Tree'); // Testing
+                        this._decisionTree(); 
+                    }
+  
+                    this.confidenceSwapPts.confidence = 0;
+                    this.confidenceSwapPts.noConfidence = 0; 
+                }
+                else if (this.compAllCards[this.compActiveCardIndex].cate === 'Fere')
+                {
+                    console.log('Player Supra Vs Comp Fere'); // Testing
+                    // -1
+                }
+                else if (this.compAllCards[this.compActiveCardIndex].cate === 'Bonum')
+                {
+                    console.log('Player Supra Vs Comp Bonum'); // Testing 
+                    // -1 
                 }
             }
-            else if (this.compAllCards[this.compActiveCardIndex].cate === 'Fere')
+            else if (this.playerSelectedCards[this.playerActiveCardKey].cate === 'Fere')
             {
-                if (this.playerPreviousAttkMultiplier === 0)
-                {
-                    // add .5 x2 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
-                {
-                    // subtract .5 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
-                {
-                    // subtract .5 x2 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
-                {
-                    // subtract .5 x2 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === 1)
-                {
-                    // subtract .5 x2 confidence points
-                }
-
-                // Read the player card swap pattern: 
-                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
-                {
-                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
-                    this._readPlayerCardSwapPattern(); 
-                }
+                console.log('Fere!'); // Testing
             }
-            else if (this.compAllCards[this.compActiveCardIndex].cate === 'Bonum')
+            else if (this.playerSelectedCards[this.playerActiveCardKey].cate === 'Bonum')
             {
-                if (this.playerPreviousAttkMultiplier === 0)
-                {
-                    // add .5 confidnece points
-                }
-                else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
-                {
-                    // subtract .5 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
-                {
-                    // subtract .5 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
-                {
-                    // subtract .5 confidence points
-                }
-                else if (this.playerPreviousAttkMultiplier === 1)
-                {
-                    // subtract .5 confidence points
-                }
-
-                // Read the player card swap pattern: 
-                if (this.playerTotalPreviousCardSwaps < computerAuditSystem.playerTotalCardSwaps)
-                {
-                    this.playerTotalPreviousCardSwaps = computerAuditSystem.playerTotalCardSwaps; 
-                    this._readPlayerCardSwapPattern(); 
-                }
-            }
-
-
-            if (this.compSwapState !== null)
-            {
-                this._swapCompCardState(this.compSwapState); 
+                console.log('Bonum!'); // Testing 
             }
         }
+    }
+
+    // _decisionTree(): Will determine the computer swap state: 
+    _decisionTree(){
+        const playerEsse = this.playerCardEsse[this.playerActiveCardKey];
+        const compEsse = this.compCardEsse[this.compActiveCardIndex];
+
+        if (playerEsse >= 1 && playerEsse < 30)
+        {
+            if (compEsse >= 1 && compEsse < 30)
+            {
+                /** |BOTH BATTLE CARDS HAVE LOW ESSE|
+                 * --- Player card is close to death / Comp card is close to death --- 
+                 * 
+                 * ==> Attack:
+                 * -> Check if attack with multipliers will eliminate the player card.
+                 * -> Check if Defend is needed against certain attacks to sustain esse
+                 * if this card is needed or a can't be done.
+                 * -> Check if a Swap to a better card with more esse is needed just in case 
+                 * the other cards attacks with multipliers can't get the job done. 
+                 * -> Check the Players Swap Pattern to see how the player is strategizing. 
+                 */
+                this._reasoning('BOTH BATTLE CARDS HAVE LOW ESSE', this.compAllCards[this.compActiveCardIndex].cate);
+            }
+            else if (compEsse >= 30 && compEsse < 60)
+            {
+                /** |COMP CARD HAS A HIGHER AMOUNT OF ESSE| 
+                 * --- Player card is close to death / Comp card has the advantage in esse ---
+                 * 
+                 * ==> Attack: 
+                 * -> Make the comp battle card attack aggressively. 
+                 * -> Check the 'Players Swap Pattern' to see how the player is strategizing. 
+                 */
+                this._reasoning('COMP CARD HAS A HIGHER AMOUNT OF ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+            else if (compEsse >= 60 && compEsse <= 100)
+            {
+                /** |COMP CARD HAS AN EXTREME HIGH AMOUNT OF ESSE|
+                 * --- Player card is close to death / Comp card has an extreme advantage in esse --- 
+                 * 
+                 * ==> Attack: 
+                 * -> Make the comp battle card attack aggressively.
+                 * -> Check the 'Players Swap Pattern' to see how the player is strategizing. 
+                 */
+                this._reasoning('COMP CARD HAS AN EXTREME HIGH AMOUNT OF ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+        }
+        else if (playerEsse >= 30 && playerEsse < 60)
+        {
+            if (compEsse >= 1 && compEsse < 30)
+            {
+                /** |COMP CARD IS CLOSE TO DEFEAT WHILE THE PLAYER IS AHEAD IN ESSE|
+                 * --- Player card is ahead in esse / Comp card is close to defeat ---
+                 * 
+                 */
+                this._reasoning('COMP CARD IS CLOSE TO DEFEAT WHILE THE PLAYER CARD IS AHEAD IN ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+            else if (compEsse >= 30 && compEsse < 60)
+            {
+                /** |BOTH BATTLE CARDS HAVE THE SAME MEDIUM AMOUNT OF ESSE|
+                 * --- Player card has a medium amount of esse / Comps card has a medium amount of esse ---
+                 * 
+                 */
+                this._reasoning('BOTH BATTLE CARDS HAVE A DECENT OF ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+            else if (compEsse >= 60 && compEsse <= 100)
+            {
+                /** |COMP CARD HAS A HIGHER AMOUNT OF ESSE|
+                 * --- Player card is close to death / Comp card has the advantage in esse ---
+                 * 
+                 */
+                this._reasoning('COMP CARD HAS A HIGHER AMOUNT OF ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+        }
+        else if (playerEsse >= 60 && playerEsse <= 100)
+        {
+            if (compEsse >= 1 && compEsse < 30)
+            {
+                /** |COMP CARD IS CLOSE TO DEFEAT WHILE THE PLAYER CARD IS EXTREMELY AHEAD IN ESSE|
+                 * 
+                 */
+                this._reasoning('COMP CARD IS CLOSE TO DEFEAT WHILE THE PLAYER CARD IS EXTREMELY AHEAD IN ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+            else if (compEsse >= 30 && compEsse < 60)
+            {
+                /** |COMP CARD IS BEHIND IN ESSE BY AN AVERAGE AMOUNT|
+                 * 
+                 */
+                this._reasoning('COMP CARD IS BEHIND IN ESSE BY AN AVERAGE AMOUNT', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+            else if (compEsse >= 60 && compEsse <=  100)
+            {
+                /** |BOTH BATTLE CARDS HAVE A HIGH AMOUNT OF ESSE|
+                 * 
+                 */
+                this._reasoning('BOTH BATTLE CARDS HAVE A HIGH AMOUNT OF ESSE', this.compAllCards[this.compActiveCardIndex].cate); 
+            }
+        }
+    }
+
+    // _reasoning(): Compupter will develop their next strategy here: 
+    _reasoning(analyzeState, compCateCard){
+        this.decisionTreeCalled = true; 
+        if (analyzeState === 'BOTH BATTLE CARDS HAVE A HIGH AMOUNT OF ESSE') // BASE: When Player Esse is between 60 and 100
+        {
+            // Note 1: May need to add the 'Player Multiplier' that the computer is getting hit with.
+            // Note 2: May need to add the 'Player Swap Card Pattern' for the computer to read. 
+
+            // PHASE 1: Read the computers current 'Attack Multipliers': 
+            this.allCompAttkMultipliers.forEach((mul) => {
+                if (compCateCard === 'Supra' && mul.cate === compCateCard)
+                {
+                    mul.multipliers.forEach((num) => {
+                        if (num === Number(0))
+                        {
+                            mul.miss++;
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                        else if (num === Number((1/2).toFixed(2)))
+                        {
+                            mul.oneHalf++;
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                    });
+                }
+                else if (compCateCard === 'Fere' && mul.cate === compCateCard)
+                {
+                    mul.multipliers.forEach((num) => {
+                        if (num === Number(0))
+                        {
+                            mul.miss++;
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                        else if (num === Number((1/2).toFixed(2)))
+                        {
+                            mul.oneHalf++;
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                    });
+                }
+                else if (compCateCard === 'Bonum' && mul.cate === compCateCard)
+                {
+                    mul.multipliers.forEach((num) => {
+                        if (num === Number(0))
+                        {
+                            mul.miss++;
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                        else if (num === Number((1/2).toFixed(2)))
+                        {
+                            mul.oneHalf++; 
+                            console.log('Set up for judgement!'); // Testing 
+                        }
+                    });
+                }
+            });
+
+            // Phase 2: Test which multipliers appeared the most:
+            if (compCateCard === 'Supra')
+            {
+                if (this.allCompAttkMultipliers[0].miss >= 1)
+                {
+                    this.allCompAttkMultipliers[0].multipliers.length = 0;
+                    this.allCompAttkMultipliers[0].miss = 0;
+                    this._swapCompCard(); 
+                    console.log('Switch Cards'); // Testing
+                }
+                else if (this.allCompAttkMultipliers[0].oneHalf >= 2)
+                {
+                    this.allCompAttkMultipliers[0].multipliers.length = 0;
+                    this.allCompAttkMultipliers[0].oneHalf = 0; 
+                    this._swapCompCard(); 
+                    console.log('Switch Cards'); // Testing 
+                }
+            }
+            else if (compCateCard === 'Fere')
+            {
+                if (this.allCompAttkMultipliers[1].miss >= 2)
+                {
+                    this.allCompAttkMultipliers[1].multipliers.length = 0;
+                    this.allCompAttkMultipliers[1].miss = 0;
+                    this._swapCompCard();
+                    console.log('Switch Cards'); // Testing 
+                }
+                else if (this.allCompAttkMultipliers[1].oneHalf >= 3)
+                {
+                    this.allCompAttkMultipliers[1].multipliers.length = 0; 
+                    this.allCompAttkMultipliers[1].oneHalf = 0; 
+                    this._swapCompCard(); 
+                    console.log('Switch Cards'); // Testing
+                }
+            }
+            else if (compCateCard === 'Bonum')
+            {
+                if (this.allCompAttkMultipliers[2].miss >= 3)
+                {
+                    this.allCompAttkMultipliers[2].multipliers.length = 0; 
+                    this.allCompAttkMultipliers[2].miss = 0;  
+                    this._swapCompCard(); 
+                    console.log('Switch Cards'); // Testing 
+                }
+            }
+        }
+        else if (analyzeState === 'COMP CARD IS BEHIND IN ESSE BY AN AVERAGE AMOUNT') // BASE: When Player Esse is between 60 and 100 
+        {
+            // PHASE 1:
+        }
+        else if (analyzeState === 'COMP CARD IS CLOSE TO DEFEAT WHILE THE PLAYER CARD IS EXTREMELY AHEAD IN ESSE') // BASE: When Player Esse is between 60 and 100
+        {
+            // PHASE 1: 
+        }
+        else if (analyzeState === 'BOTH BATTLE CARDS HAVE LOW ESSE') // When Player Esse is between 1 and 30
+        {
+            console.log('Comp Battle Card: ', this.compAllCards[this.compActiveCardIndex]); // Testing
+            console.log('Comps Battle Card Attack: ', this.compAllCards[this.compActiveCardIndex].atk); // Testing
+            console.log('Player Current Esse: ', this.playerCardEsse[this.playerActiveCardKey]); // Testing
+            console.log('Comp Current Esse: ', this.compCardEsse[this.compActiveCardIndex]); // Testing
+            let allEssesAfterAttack = [];
+            
+            // PHASE 1: Find what 'Computer Attack With Attack Multiplier' will lower the esse close to zero or to zero:
+            this.attackMultipliers.forEach((mul) => {
+                if (mul !== 0)
+                {
+                    // 1/2 - 2/3 - 3/4 - 1 -> Multipliers
+                    const attackWithMultiplier = Number((mul.toFixed(2))) * this.compAllCards[this.compActiveCardIndex].atk; 
+                    const damage = Math.abs(attackWithMultiplier - this.player);
+                    const esseAfterAttack = Math.max(this.playerCardEsse[this.playerActiveCardKey] - damage); 
+                    if (esseAfterAttack <= 0) allEssesAfterAttack.push(esseAfterAttack);
+                }
+            });
+
+            // PHASE 2: Find the lowest the amount esse after the sort and analyze: 
+            allEssesAfterAttack.sort((a, b) => a - b);
+            if (allEssesAfterAttack[0] <= 0)
+            {
+                // Player card will be eliminated with
+                // this attack, so there is no need to
+                // swap cards during the comps base move.
+                // Note: Keep in mind the computer could
+                // also miss the base move - attack with
+                // a 0 attack multiplier.
+
+            }
+            else if (allEssesAfterAttack[0] >= 1 && allEssesAfterAttack[0] < 25)
+            {
+                // Player card will not be eliminated with
+                // the comps current attack, so you may 
+                // need to swap your card to a better card
+                // that has higher attack, or take the chance
+                // with the attack. (SWAP)
+
+                // Note: Supras will most likely be able to
+                // finish the opposing card. 
+
+                // Note: Even if you have a Supra, attacking
+                // with it while having low esse might not be
+                // worth it because of 0 attack multipliers. 
+                
+                // Note: You may want to check the 
+                // 'Players Pattern Swap' so the
+                // computer can understand how the player
+                // is really playing the game: 
+            }
+        }
+        this.decisionTreeCalled = false;
     }
 
     // _swapCompCard: Computer will swap there cards out here:
@@ -1589,6 +1955,7 @@ export default class GameBattleScene extends Phaser.Scene {
         // Change the 'Active Card Index' with the'Math.random' function: 
         let randomIndex = Math.floor(Math.random() * this.compDeckIndex.length);         
         this.compActiveCardIndex = this.compDeckIndex[randomIndex];
+        console.log('COMP DECK INDEX ARRAY: ', this.compDeckIndex); // Testing 
 
         // Rebuild the BCS comp slot: 
         this.bcsCompSlotCon.removeAll(true);
@@ -1617,7 +1984,46 @@ export default class GameBattleScene extends Phaser.Scene {
 
     //_swapCompCardState(): Will swap the cards depending on the 'Comps Swap State':
     _swapCompCardState(swapState){
-        if (swapState === 'Very High Protection For Supra')
+
+        if (swapState === 'Basic Tempo') // Basic Tempo - default comp card state 
+        {
+            console.log('BASIC TEMPO - COMP CONFIDENCE PTS: ', this.confidenceSwapPts.mainPts); // Testing
+            // Can also place other 'Basic Tempo' swap states in here. 
+
+            if (this.confidenceSwapPts.mainPts <= 2.5)
+            {
+                // Reverse the 'Confidence Swap Points' back to 5 when a new card is on deck: 
+                this.confidenceSwapPts.mainPts = 5; 
+
+                // Choose a random card from the computers deck: 
+                const randomIndex = Math.floor(Math.random() * this.compDeckIndex.length); 
+                this.compActiveCardIndex = this.compDeckIndex[randomIndex]; 
+
+                // Rebuild the BCS comp slot:
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card changing animation: 
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck: 
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+
+        }
+        else if (swapState === 'High Protection For Supra' && this.compSwapMeter < 8)
         {
             /** |Very High Protection For Supra|
              * The Player has is preserving the esse of their Supra card by switching it out 
@@ -1655,7 +2061,7 @@ export default class GameBattleScene extends Phaser.Scene {
             }
             else if (this.compAllCards[this.compActiveCardIndex].cate !== 'Supra' && this.moveSelection.comp)
             {
-                // declare the Supra index:
+                // Declare the Supra index:
                 this.compActiveCardIndex = 0;
 
                 // Rebuild the BCS comp slot: 
@@ -1679,6 +2085,153 @@ export default class GameBattleScene extends Phaser.Scene {
                 this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
                 this.cdsContainer.add(newDeckCon); 
                 this.cdsCompDeckCon = newDeckCon; 
+            }
+            
+            this.compSwapMeter++;
+            // Check the Swap meter: 
+            if (this.compSwapMeter === 8)
+            {
+                this.compSwapMeter = 0;
+                this.compSwapState = 'Basic Tempo';
+                this.confidenceSwapPts = 5; 
+            }
+        }
+        else if (swapState === 'Average Protection For Supra' && this.compSwapMeter < 5)
+        {
+            // Notes: Average Protection For Supra for a decent amount of time and then back to 'Basic Tempo':
+            console.log('--AVERAGE PROTECTION FOR SUPRA--') // Testing 
+            console.log('Supra Esse: ', this.compCardEsse[this.compActiveCardIndex]); // Testing
+            if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra' && !this.moveSelection.comp)
+            {
+                const randomIndex = Math.floor(Math.random() * this.compDeckIndex.length);
+                this.compActiveCardIndex = this.compDeckIndex[randomIndex];  
+
+                // Rebuild the BCS comp slot: 
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card changing animation:
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck:
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+            else if (this.compAllCards[this.compActiveCardIndex].cate !== 'Supra' && this.moveSelection.comp)
+            {
+                // Declare the Supra index:
+                this.compActiveCardIndex = 0; 
+
+                // Rebuild the BCS comp slot:
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card changing animation: 
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck:
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+            
+            this.compSwapMeter++;
+            // Check the swap meter:
+            if (this.compSwapMeter === 4)
+            {
+                this.compSwapMeter = 0;
+                this.compSwapState = 'Basic Tempo';  
+                this.confidenceSwapPts = 5;
+            }
+        }
+        else if (swapState === 'Low Protection For Supra' && this.compSwapMeter < 2)
+        {
+            console.log('--LOW PROTECTION FOR SUPRA--'); // Testing
+            console.log('Supra Esse: ', this.compCardEsse[this.compActiveCardIndex]); // Testing 
+
+            if (this.compAllCards[this.compActiveCardIndex].cate === 'Supra' && !this.moveSelection.comp)
+            {
+                const randomIndex = Math.floor(Math.random() * this.compDeckIndex.length);
+                this.compActiveCardIndex = this.compDeckIndex[randomIndex];  
+
+                // Rebuild the BCS comp slot:
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card Changing animation:
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck: 
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+            else if (this.compAllCards[this.compActiveCardIndex].cate !== 'Supra' && this.moveSelection.comp)
+            {
+                // Declare the Supra index:
+                this.compActiveCardIndex = 0; 
+
+                // Rebuild the BCS comp slot:
+                this.bcsCompSlotCon.removeAll(true);
+                this.bcsCompSlotCon.destroy(); 
+                const newBcsSlot = this.add.container(0,0); 
+                this._drawBattleCardSlot(newBcsSlot, this.compAllCards[this.compActiveCardIndex], 'comp', this.bcsPanelW, this.bcsCardCenterY, this.compCardEsse[this.compActiveCardIndex] ?? null)
+                this.bcsContainer.add(newBcsSlot);
+                this.bcsCompSlotCon = newBcsSlot;
+
+                // Card Changing animation:
+                this.tweens.add({
+                    targets: newBcsSlot, scaleX: 1.06, scaleY: 1.06, 
+                    duration: 220, yoyo: true, ease: 'Back.easeOut', 
+                });
+
+                // Rebuild CDS comp deck: 
+                this.cdsCompDeckCon.removeAll(true); 
+                this.cdsCompDeckCon.destroy(); 
+                const newDeckCon = this.add.container(0,0); 
+                this._buildDeckCards(newDeckCon, this._getCompDeckCards(), 'comp', this.bcsPanelW, this.cdsCardAreaCY); 
+                this.cdsContainer.add(newDeckCon); 
+                this.cdsCompDeckCon = newDeckCon; 
+            }
+            
+            this.compSwapMeter++; 
+            // Check the swap meter: 
+            if (this.compSwapMeter === 2)
+            {
+                this.compSwapMeter = 0;
+                this.compSwapState = 'Basic Tempo';  
+                this.confidenceSwapPts = 5;
             }
         }
     }
@@ -1723,7 +2276,7 @@ export default class GameBattleScene extends Phaser.Scene {
             }); 
         }
 
-        // ... ...
+        // Phase 2: Test out the swap cates with Player swap cates: 
         testCates.forEach((test) => {
             cateArr.forEach((cate, index) => {
                 if (index % 2 === 0)
@@ -1743,7 +2296,7 @@ export default class GameBattleScene extends Phaser.Scene {
             });
         });
         
-        // Test the patterns array when the length is 9:
+        // Phase 3: Test the patterns array when the length is 9:
         if (patterns.length === 10)
         {
             // Reset the 'Swap Auditing' values:
@@ -1751,50 +2304,56 @@ export default class GameBattleScene extends Phaser.Scene {
             computerAuditSystem.playerPatternCardSwaps = {};  
 
             patterns.forEach((p) => {
-                // Card used for attacks:
-                if (p.attkCard === 'Supra')
+                if (p.attkCard === 'Supra') // Attacks with cards
                 {
-                    computerAuditSystem.attksWithSupra++;
+                    this.playerAttksWithSupra++; 
+                    computerAuditSystem.playerAttksWithSupraTotal += 1; 
                 }
                 else if (p.attkCard === 'Fere')
                 {
-                    computerAuditSystem.attksWithFere++;
+                    this.playerAttksWithFere++;
+                    computerAuditSystem.playerAttksWithFereTotal += 1;
                 }
                 else if (p.attkCard === 'Bonum')
                 {
-                    computerAuditSystem.attksWithBonum++; 
+                    this.playerAttksWithBonum++;
+                    computerAuditSystem.playerAttksWithBonumTotal += 1; 
                 }
 
-                // Card attacked: 
-                if (p.cardAttked === 'Supra')
+                if (p.cardAttked === 'Supra') // Card attacked
                 {
-                    computerAuditSystem.supraAttked++;
+                    this.playerSupraAttked++;
+                    computerAuditSystem.playerSupraAttkedTotal += 1;
                 }
                 else if (p.cardAttked === 'Fere')
                 {
-                    computerAuditSystem.fereAttked++;
+                    this.playerFereAttked++; 
+                    computerAuditSystem.playerFereAttkedTotal += 1;
                 }
                 else if (p.cardAttked === 'Bonum')
                 {
-                    computerAuditSystem.bonumAttked++;  
+                    this.playerBonumAttked++;
+                    computerAuditSystem.playerBonumAttkedTotal += 1;
                 }
             });
 
-            // Find the computers swap state: 
-            if (computerAuditSystem.attksWithSupra > computerAuditSystem.supraAttked)
+            if (this.playerAttksWithSupra >= 4 && this.playerSupraAttked === 0)
             {
-                if (computerAuditSystem.attksWithSupra >= 4 && computerAuditSystem.supraAttked === 0) // Very High Protection for Supra
-                {
-                    // const swapState = new SwapState('Very High Protection For Supra'); 
-                    // swapState.bcsContainer      = this.bcsContainer;
-                    // swapState.bcsCompSlotCon    = this.bcsCompSlotCon;
-                    // swapState.cdsContainer      = this.cdsContainer; 
-                    // swapState.cdsCompDeckCon    = this.cdsCompDeckCon; 
-
-                    // swapState.compMove          = this.moveSelection.comp; 
-                    this.compSwapState = 'Very High Protection For Supra';  
-                    this.cardSwitchTriggerTest = false; 
-                }
+                this.compSwapState = 'High Protection For Supra';  
+                this.playerAttksWithSupra = 0;
+                this.playerSupraAttked = 0;
+            }
+            else if (this.playerAttksWithSupra >= 3 && this.playerSupraAttked >= 2)
+            {
+                this.compSwapState = 'Average Protection For Supra';
+                this.playerAttksWithSupra = 0; 
+                this.playerSupraAttked = 0; 
+            }
+            else if (this.playerAttksWithSupra <= 1 && this.playerSupraAttked >= 2)
+            {
+                this.compSwapState = 'Low Protection For Supra'; 
+                this.playerAttksWithSupra = 0;
+                this.playerSupraAttked = 0;  
             }
         }
     }
@@ -2165,7 +2724,7 @@ export default class GameBattleScene extends Phaser.Scene {
         console.log("Defender Portrait: ", dfdrPortrait); // Testing
         console.log("\n"); // Testing 
 
-        // Collect attack data for the computerAuditSystem to build computer intelligence:
+        //COLLECT: Collect attack data for the computerAuditSystem to build computer intelligence:
         if (isPlayer && computerAuditSystem.playerTotalCardSwaps !== 10)
         {
             this.playerPreviousMove = 'attack';
@@ -2198,6 +2757,30 @@ export default class GameBattleScene extends Phaser.Scene {
                 }
             });
         }
+
+        // Reset the 'All Comp and Player Attk Multipliers Array': 
+        if (this.allCompAttkMultipliers[0].multipliers.length === 3) this.allCompAttkMultipliers[0].multipliers.length = 0; 
+        if (this.allCompAttkMultipliers[1].multipliers.length === 3) this.allCompAttkMultipliers[1].multipliers.length = 0; 
+        if (this.allCompAttkMultipliers[2].multipliers.length === 3) this.allCompAttkMultipliers[2].multipliers.length = 0; 
+
+        // COLLECT: ... The Player and Computer Attack Multiplier ...
+        if (isPlayer)
+        {
+            // ... ...  ... 
+        }
+
+        if (!isPlayer)
+        {
+            this.allCompAttkMultipliers.forEach((mul) => {
+                if (this.compAllCards[this.compActiveCardIndex].cate === mul.cate)
+                {
+                    mul.multipliers.push(attackMultiplier);  
+                }
+            }); 
+        }
+
+        // Calculate the computers confidence points:
+        // this.calculateCompConfidencePoints(); 
 
         const applyAndFinish = () => {
             // Note: Might audit damage for the computer audit system (CCI):
@@ -2249,6 +2832,76 @@ export default class GameBattleScene extends Phaser.Scene {
             });
         } else {
             applyAndFinish();
+        }
+    }
+
+    // calculateCompConfidencePoints(): Will calculate the computers confidence points: 
+    calculateCompConfidencePoints(){
+        if (this.moveSelection.player)
+        {
+            if (this.playerPreviousAttkMultiplier === 0)
+            {
+                // add .5 x3 confindence points: 
+                this.confidenceSwapPts.mainPts += (.5 + .5 + .5 + .5); 
+                if (this.confidenceSwapPts.mainPts > 5) this.confidenceSwapPts.mainPts = 5; 
+            }
+            else if (this.playerPreviousAttkMultiplier === (1/2).toFixed(2))
+            {
+                // subtract .5 confidence points:
+                this.confidenceSwapPts.mainPts -= (.5 + .5 + .5 + .5 + .5); 
+                if (this.confidenceSwapPts.mainPts < 0) this.confidenceSwapPts.mainPts = 0;
+            }
+            else if (this.playerPreviousAttkMultiplier === (2/3).toFixed(2))
+            {
+                // subtract .5 x2 confidence points:
+                this.confidenceSwapPts.mainPts -= (.5 + .5 + .5 + .5 + .5 + .5); 
+                if (this.confidenceSwapPts.mainPts < 0) this.confidenceSwapPts.mainPts = 0;
+            }
+            else if (this.playerPreviousAttkMultiplier === (3/4).toFixed(2))
+            {
+                // subtract .5 x3 confidence points:
+                this.confidenceSwapPts.mainPts -= (.5 + .5 + .5 + .5 + .5 + .5 + .5); 
+                if (this.confidenceSwapPts.mainPts < 0) this.confidenceSwapPts.mainPts = 0; 
+            }
+            else if (this.playerPreviousAttkMultiplier === 1)
+            {
+                // subtract .5 x4 confidence points:
+                this.confidenceSwapPts.mainPts -= (.5 + .5 + .5 + .5 + .5 + .5 + .5 + .5);
+                if (this.confidenceSwapPts.mainPts < 0) this.confidenceSwapPts.mainPts = 0; 
+            }
+        }
+        else if (this.moveSelection.comp)
+        {
+            if (this.compPreviousAttkMultiplier === 0)
+            {
+                // subtract .5 x3 confidence points:
+                this.confidenceSwapPts.mainPts -= (.5 + .5 + .5);
+                if (this.confidenceSwapPts.mainPts < 0) this.confidenceSwapPts.mainPts = 0; 
+            }
+            else if (this.compPreviousAttkMultiplier === (1/2).toFixed(2))
+            {
+                // add .5 confidence points:
+                this.confidenceSwapPts.mainPts += .5;
+                if (this.confidenceSwapPts.mainPts > 5) this.confidenceSwapPts.mainPts = 5; 
+            }
+            else if (this.compPreviousAttkMultiplier === (2/3).toFixed(2))
+            {
+                // add .5 x2 confidence points:
+                this.confidenceSwapPts.mainPts += (.5 + .5); 
+                if (this.confidenceSwapPts.mainPts > 5) this.confidenceSwapPts.mainPts = 5;
+            }
+            else if (this.compPreviousAttkMultiplier === (3/4).toFixed(2))
+            {
+                // add .5 x3 confidence points:
+                this.confidenceSwapPts.mainPts += (.5 + .5 + .5);
+                if (this.confidenceSwapPts.mainPts > 5) this.confidenceSwapPts.mainPts = 5;
+            }
+            else if (this.compPreviousAttkMultiplier === 1)
+            {
+                // add .5 x4 confidence points:
+                this.confidenceSwapPts.mainPts += (.5 + .5 + .5 + .5);
+                if (this.confidenceSwapPts.mainPts > 5) this.confidenceSwapPts.mainPts = 5; 
+            }
         }
     }
 
@@ -2456,8 +3109,9 @@ export default class GameBattleScene extends Phaser.Scene {
                 this.playerBattlePortrait.setDisplaySize(64, 64); 
                 this._updateTurnIndicator();
 
-                if (this.compSwapState === null) this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.noSwap;
-                else if (this.compSwapState === 'Very High Protection For Supra') this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.normalSwap;
+                // Change the current 'Comp Swap State' if needed: 
+                if (this.compSwapState === 'Basic Tempo') this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.basicTempoTime;
+                else if (this.compSwapState === 'High Protection For Supra') this.swapToAttackTimeFrame.timeFrame = this.swapToAttackTimeFrame.protectSupraHighTime;
                 this.time.delayedCall(this.swapToAttackTimeFrame.timeFrame, () => this._compTurn());
             }
 

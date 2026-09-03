@@ -32,12 +32,12 @@ export const computerAuditSystem = {
     compTotalCardSwaps: 0,
     compPatternCardSwaps: {}, 
 
-    attksWithSupra: 0,
-    supraAttked: 0,
+    playerAttksWithSupraTotal: 0,
+    playerSupraAttkedTotal: 0,
 
-    attksWithFere: 0,
-    fereAttked: 0,
+    playerAttksWithFereTotal: 0,
+    playerFereAttkedTotal: 0, 
 
-    attksWithBonum: 0,
-    bonumAttked: 0, 
+    playerAttksWithBonumTotal: 0,
+    playerBonumAttkedTotal: 0, 
 }; 
