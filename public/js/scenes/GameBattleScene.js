@@ -1,5 +1,5 @@
 import { initiatorCards } from '../models/initiatorCards.js';
-import { SINGULARITY_CARDS } from '../models/singularityCards.js';
+import { SINGULARITY_CARDS, STORE_CARDS } from '../models/singularityCards.js';
 
 import { singularityPointStore } from '../gameTools/singularityPointStore.js';
 import { computerAuditSystem } from '../gameTools/computerAuditSystem.js';
@@ -3627,7 +3627,7 @@ export default class GameBattleScene extends Phaser.Scene {
         const scrollViewBot =  shopH / 2 - 30;
         const viewH         = scrollViewBot - scrollViewTop;
 
-        const nRows      = Math.ceil(SINGULARITY_CARDS.length / cardsPerRow);
+        const nRows      = Math.ceil(STORE_CARDS.length / cardsPerRow);
         const rowW       = cardsPerRow * cardW + (cardsPerRow - 1) * colGap;
         const totalGridH = nRows * cardH + (nRows - 1) * rowGap;
         const maxScroll  = Math.max(0, totalGridH - viewH);
@@ -3636,7 +3636,7 @@ export default class GameBattleScene extends Phaser.Scene {
 
         const scrollCon = this.add.container(0, 0);
 
-        SINGULARITY_CARDS.forEach((def, i) => {
+        STORE_CARDS.forEach((def, i) => {
             const col = i % cardsPerRow;
             const row = Math.floor(i / cardsPerRow);
 
@@ -3839,7 +3839,7 @@ export default class GameBattleScene extends Phaser.Scene {
         const emptyIdx = this.scdsCompSlots.findIndex(s => s === null);
         if (emptyIdx === -1) return;
 
-        const affordable = [...SINGULARITY_CARDS]
+        const affordable = [...STORE_CARDS]
             .filter(def => this.singularityPointStock.compPoints >= def.cost)
             .sort((a, b) => b.cost - a.cost);
 

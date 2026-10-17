@@ -76,6 +76,6 @@ export default class GameSelectScene extends Phaser.Scene {
         }
 
         // Create each button:
-        createdUIButton(centerY - 80, 'Exhibition Game', () => { this.scene.start('CardSelectScene') }); // Quick Game Mode
+        createdUIButton(centerY - 80, 'Exhibition Game', () => { this.scene.start('CardSelectScene', { mode: 'single' }) }); // Quick Game Mode
     }
 }

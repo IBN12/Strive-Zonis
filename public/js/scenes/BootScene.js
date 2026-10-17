@@ -12,6 +12,9 @@ export default class BootScene extends Phaser.Scene{
         const centerX = this.sys.game.config.width / 2;
         const centerY = this.sys.game.config.height / 2; 
 
+        // Will review and provide the correct session for the multiplayer:
+        this._sessionProcedure();
+
         // Enter game button:
         const playButton = this.add.text(centerX, centerY, 'Enter Game', {
             fontSize: '32px',
@@ -33,5 +36,11 @@ export default class BootScene extends Phaser.Scene{
         playButton.on('pointerout', () => playButton.setStyle({
             fill: 'white',
         }));
+    }
+
+    // _sessionProcedure(): Review and provides the session procedure for the user.
+    _sessionProcedure(){
+        // Will add session restore on boot here - Now that sessionss are real, check
+        // for one when the game starts. 
     }
 }

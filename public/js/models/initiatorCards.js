@@ -1,5 +1,6 @@
 export const initiatorCards = [
     {
+        id: 1,
         name: "Tobo The Fighter",
         shortName: "Tobo",
         cate: "Supra",
@@ -11,6 +12,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 2,
         name: "The One From System",
         shortName: "Jace",
         cate: "Supra",
@@ -22,6 +24,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 3,
         name: "Spunky With The Funky Draco",
         shortName: "Spunky",
         cate: "Supra",
@@ -33,6 +36,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 4,
         name: "Allybelle",
         shortName: "Ally",
         cate: "Fere",
@@ -44,6 +48,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 5,
         name: "The Experiment",
         shortName: "Mason",
         cate: "Fere",
@@ -55,6 +60,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 6,
         name: "The Trendsetter Rotao",
         shortName: "Rotao",
         cate: "Fere",
@@ -66,6 +72,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 7,
         name: "Dan The Prol", 
         shortName: "Dan",
         cate: "Bonum",
@@ -77,6 +84,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 8,
         name: "Mac The Rat",
         shortName: "Mac",
         cate: "Bonum",
@@ -88,6 +96,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 9,
         name: "A Karen",
         shortName: "Karen",
         cate: "Bonum", 
@@ -99,6 +108,7 @@ export const initiatorCards = [
     },
 
     {
+        id: 10,
         name: "The Office Worker Ken",
         shortName: "Ken",
         cate: "Bonum", 

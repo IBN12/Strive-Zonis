@@ -1,4 +1,12 @@
-node_modules
-dist
-/server/.env
+node_modules/
+dist/
 *.log
+
+# Secrets - never commit real environment files (the .example template is fine)
+.env
+*.env
+!*.env.example
+/server/.env
+
+# Local test leftovers (curl cookie jars can hold a live login session)
+cookies.txt

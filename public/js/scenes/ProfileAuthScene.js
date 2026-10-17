@@ -28,7 +28,9 @@ export default class ProfileAuthScene extends Phaser.Scene{
         super('ProfileAuthScene');
     }
 
-    init(data){
+    init(data){ 
+        // That 'data' was not passed as a local object and does not contain returnScene 
+        // for the (Optional Chaining):
         this.returnScene = data?.returnScene || 'MultiplayerScene';
         this.mode = data?.mode || 'login'; // 'login' | 'register'
         this.busy = false;

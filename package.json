@@ -3,15 +3,28 @@
   "version": "1.0.0",
   "description": "Strive Zonis: We Are Zonis",
   "main": "electron-main.js",
+  "strive": {
+    "buildMode": "development",
+    "servers": {
+      "development": "http://localhost:3000",
+      "production": "https://play.strivezonis.example"
+    }
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node --watch server",
-    "start": "node server.js",
+    "test": "node --test server/test/*.test.js",
+    "dev": "node --watch --env-file=server/.env server.js",
+    "start": "node --env-file=server/.env server.js",
     "db:migrate": "psql -h localhost -U postgres -d strive_zonis -f db/schema.sql",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "electron": "electron .",
+    "electron:windowed": "electron . --windowed",
+    "electron:SCTest": "electron server/test/singularityCardAnimationTesting.js",
+    "build:dev": "electron-builder -c.extraMetadata.strive.buildMode=development -c.directories.output=dist/development",
+    "build:dev:win": "electron-builder --win -c.extraMetadata.strive.buildMode=development -c.directories.output=dist/development",
+    "build:dev:linux": "electron-builder --linux -c.extraMetadata.strive.buildMode=development -c.directories.output=dist/development",
+    "build:prod": "electron-builder -c.extraMetadata.strive.buildMode=production -c.directories.output=dist/production",
+    "build:prod:win": "electron-builder --win -c.extraMetadata.strive.buildMode=production -c.directories.output=dist/production",
+    "build:prod:mac": "electron-builder --mac -c.extraMetadata.strive.buildMode=production -c.directories.output=dist/production",
+    "build:prod:linux": "electron-builder --linux -c.extraMetadata.strive.buildMode=production -c.directories.output=dist/production"
   },
   "repository": {
     "type": "git",
@@ -27,20 +40,25 @@
   "homepage": "https://github.com/IBN12/Strive-Zonis#readme",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "connect-redis": "^10.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
     "express-session": "^1.19.0",
     "helmet": "^8.3.0",
+    "nanoid": "^6.0.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.23.0",
-    "phaser": "^4.2.1"
+    "phaser": "^4.2.1",
+    "redis": "^6.2.1",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "electron": "^43.3.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "socket.io-client": "^4.8.3"
   },
   "build": {
     "appId": "com.isom.strivezonis",
@@ -50,10 +68,8 @@
     },
     "files": [
       "electron-main.js",
-      "public/**/*",
       "package.json",
-      "!**/node_modules/*/{CHANGELOG.md, README.md, README, readme.md, readme}",
-      "!**/*.map"
+      "!node_modules/**/*"
     ],
     "win": {
       "target": "portable"

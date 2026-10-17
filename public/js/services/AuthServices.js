@@ -8,8 +8,11 @@
  * To go live: set USE_MOCK = false and start the server. Nothing else changes.
  */
 
-const USE_MOCK = true;
-const API_BASE = 'http://localhost:3000'; 
+// const USE_MOCK = true;
+const USE_MOCK = false;
+// Same origin as the page whenever the game is served over http(s) (browser or
+// Electron loading the server URL). The fallback only matters for file:// pages.
+const API_BASE = location.protocol.startsWith('http') ? location.origin : 'http://localhost:3000';
 
 // ----------------------------------------------------------------------
 // Validation - mirror these rules on the server. Client checks are
@@ -50,12 +53,21 @@ class AuthServiceClass {
     // Validation helpers (used by the scene for inline feedback) 
     // ----------------------------------------------------------------------
     validateUsername(v){
-        if (!v) return 'Username is required';
+        if (!v)
+        {
+            return 'Username is required';
+        } 
+
         if (v.length < RULES.username.min || v.length > RULES.username.max)
         {
             return RULES.username.message;
         }
-        if (!RULES.username.pattern.test(v)) return RULES.username.message; 
+
+        if (!RULES.username.pattern.test(v))
+        {
+            return RULES.username.message; 
+        } 
+        return null;
     }
 
     validatePassword(v){

@@ -5,6 +5,8 @@ import CardSelectScene from "../scenes/CardSelectScene.js";
 import GameBattleScene from "../scenes/GameBattleScene.js";
 import MultiplayerScene from "../scenes/MultiplayerScene.js";
 import ProfileAuthScene from "../scenes/ProfileAuthScene.js";
+import FindMatchScene from "../scenes/FindMatchScene.js";
+import MultiplayerBattleScene from "../scenes/MultiplayerBattleScene.js";
 
 
 /** |Notes|
@@ -66,6 +68,8 @@ const config = {
         GameBattleScene,
         MultiplayerScene,
         ProfileAuthScene, 
+        FindMatchScene,
+        MultiplayerBattleScene,
     ], // Order doesn't matters
 }
 
